@@ -1,0 +1,39 @@
+{
+  "name": "codex-dog",
+  "productName": "Codex Dog",
+  "version": "0.4.0-g04",
+  "private": true,
+  "type": "module",
+  "main": "out/main.cjs",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "build": "pnpm typecheck && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "start": "node scripts/launch.mjs",
+    "dev": "pnpm build && pnpm start",
+    "cli": "node out/cli.cjs",
+    "pack:cli": "node scripts/pack-cli.mjs",
+    "install:electron": "node node_modules/electron/install.js",
+    "test": "node --test test/*.test.ts",
+    "test:g01": "node scripts/g02-smoke.mjs --g01-only",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
+    "test:g02": "node scripts/g02-smoke.mjs",
+    "test:g03": "node scripts/g03-smoke.mjs",
+    "test:g04": "node scripts/g04-smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "24.19.2",
+    "electron": "45.0.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}
