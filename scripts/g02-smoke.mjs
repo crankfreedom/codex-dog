@@ -149,7 +149,7 @@ try {
   mark('同 profile 并发启动仅保留原实例，不重写端点或重复 worker');
   mcpTransport = new StdioClientTransport({ command: executable, args: ['mcp', 'serve', '--profile', profile, '--client', 'mcp'], env: executableEnv, stderr: 'pipe' });
   client = new Client({ name: 'g02-validation', version: '1.0.0' }); await client.connect(mcpTransport);
-  assert.equal((await client.listTools()).tools.length, 23);
+  assert.equal((await client.listTools()).tools.length, 42);
   const unpairedMcp = await client.callTool({ name: 'quota_get', arguments: {} }); assert.equal(unpairedMcp.structuredContent.error.code, 'AUTH_REQUIRED');
   const mcpPair = await client.callTool({ name: 'access_request', arguments: { clientLabel: 'mcp', requestedScopes: ['read'] } }); assert.equal(mcpPair.isError, false); await approve(mcpPair.structuredContent.data);
   const mcpQuota = await client.callTool({ name: 'quota_get', arguments: {} }); assert.deepEqual(mcpQuota.structuredContent.data, ipcQuota.data); assert.equal(mcpQuota.structuredContent.meta.handlerInstanceId, ipcQuota.meta.handlerInstanceId);

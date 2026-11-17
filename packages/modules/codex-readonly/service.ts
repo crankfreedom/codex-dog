@@ -21,7 +21,7 @@ export class CodexReadonlyService {
     this.provider = provider; this.goals = goals; this.options = options; this.connectionId = options.newId();
   }
   async start() { try { await this.refresh(); } catch (error) { this.lastError = error instanceof ReadError ? error.code : 'PROVIDER_UNAVAILABLE'; } }
-  status() { return { connectionId: this.connectionId, revision: this.revision, source: 'live', state: this.poisoned ? 'identity_changed' : this.provider.connected() && this.fingerprint && !this.lastError ? 'ready' : 'unavailable', identityVerified: !!this.fingerprint && !this.poisoned && !this.lastError, goalAccountBindingVerified: false, reason: this.lastError, readOnly: true, readCalls: this.provider.audit?.() ?? {} }; }
+  status() { return { connectionId: this.connectionId, revision: this.revision, source: this.options.source ?? 'live', state: this.poisoned ? 'identity_changed' : this.provider.connected() && this.fingerprint && !this.lastError ? 'ready' : 'unavailable', identityVerified: !!this.fingerprint && !this.poisoned && !this.lastError, goalAccountBindingVerified: false, reason: this.lastError, readOnly: true, readCalls: this.provider.audit?.() ?? {} }; }
   discover() { return this.provider.discover(); }
   private selection(connectionId: unknown) {
     if (connectionId !== this.connectionId) throw new ReadError('CONNECTION_IDENTITY_CHANGED', '连接实例已变化，请重新读取连接信息');
@@ -51,7 +51,7 @@ export class CodexReadonlyService {
     });
     const blocked = value.spendControlReached === true || !!value.rateLimitReachedType || quota.ordinaryUsageAllowed === false || windows.some(w => w.usedPercent !== null && Number(w.usedPercent) >= 100);
     const unknown = windows.some(w => w.usedPercent === null);
-    return { source: 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionId: this.connectionId, connectionRevision: this.revision, available: blocked ? false : unknown ? null : true, reason: blocked ? 'quota_exhausted' : unknown ? 'quota_unknown' : 'quota_available', windows };
+    return { source: this.options.source ?? 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionId: this.connectionId, connectionRevision: this.revision, available: blocked ? false : unknown ? null : true, reason: blocked ? 'quota_exhausted' : unknown ? 'quota_unknown' : 'quota_available', windows };
   }
   async refresh(): Promise<Record<string, unknown>> {
     if (this.refreshTask) return this.refreshTask;
@@ -81,7 +81,7 @@ export class CodexReadonlyService {
         if (typeof row.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(row.id) || row.kind !== 'codex' || row.hostId !== 'local' || typeof row.status !== 'string' || row.status.length > 100) throw new ReadError('TARGET_IDENTITY_MISMATCH', '会话来源或身份不匹配');
         return { threadId: row.id, connectionId: this.connectionId, status: row.status, statusKnown: knownStates.has(row.status) };
       });
-      return { items, nextCursor: raw.nextCursor ?? null, source: 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionRevision: this.revision };
+      return { items, nextCursor: raw.nextCursor ?? null, source: this.options.source ?? 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionRevision: this.revision };
     });
   }
   private async inspect(params: Record<string, unknown>) {
@@ -96,13 +96,13 @@ export class CodexReadonlyService {
       if (JSON.stringify(before) !== JSON.stringify(after)) throw new ReadError('GOAL_IDENTITY_CHANGED', '读取期间 Goal 身份或状态已变化');
       let latestTurn: { id: string; status: string } | null = null;
       if (raw.turns.length) { const turn = object(raw.turns[0]); if (typeof turn.id !== 'string' || typeof turn.status !== 'string') throw new ReadError('PROVIDER_SCHEMA_UNSUPPORTED', '最新轮次状态无效'); latestTurn = { id: turn.id, status: turn.status }; }
-      return { connectionId: this.connectionId, threadId, status: status.type, statusKnown: knownStates.has(status.type), activeFlags: status.activeFlags ?? [], latestTurn, goal: after, source: 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionRevision: this.revision, completionConfirmed: false, goalAccountBindingVerified: false };
+      return { connectionId: this.connectionId, threadId, status: status.type, statusKnown: knownStates.has(status.type), activeFlags: status.activeFlags ?? [], latestTurn, goal: after, source: this.options.source ?? 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionRevision: this.revision, completionConfirmed: false, goalAccountBindingVerified: false };
     });
   }
   async thread(params: Record<string, unknown>) { return this.inspect(params); }
   async goal(params: Record<string, unknown>) {
     const view = await this.inspect(params);
-    return { connectionId: view.connectionId, threadId: view.threadId, ...view.goal, source: 'local', observedAt: view.observedAt, stale: false, connectionRevision: this.revision, desktopThreadVerified: true, goalAccountBindingVerified: false, completionConfirmed: false };
+    return { connectionId: view.connectionId, threadId: view.threadId, ...view.goal, source: this.options.source === 'fixture' ? 'fixture' : 'local', observedAt: view.observedAt, stale: false, connectionRevision: this.revision, desktopThreadVerified: true, goalAccountBindingVerified: false, completionConfirmed: false };
   }
   close() { this.snapshot = undefined; this.provider.close(); }
 }

@@ -15,6 +15,7 @@ export class ReadError extends Error {
   constructor(code: string, message: string) { super(message); this.code = code; }
 }
 export interface ReadonlyOptions {
+  source?:'live'|'fixture';
   newId(): string;
   digest(value: string): string;
   now(): number;

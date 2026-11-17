@@ -4,12 +4,17 @@ import { ElButton } from 'element-plus';
 import { useDesktop } from './store.ts';
 import ClientCard from './ClientCard.vue';
 import SourceSettings from './SourceSettings.vue';
+import SettingsPage from './SettingsPage.vue';
+import ThreadsPage from './ThreadsPage.vue';
+import DiagnosticsPage from './DiagnosticsPage.vue';
+import HistoryPage from './HistoryPage.vue';
+import HelpPage from './HelpPage.vue';
 import type { QuotaWindow } from './quota-view.ts';
 const emptyWindows: QuotaWindow[] = [{ name: 'primary', usedPercent: null, remainingPercent: null }, { name: 'secondary', usedPercent: null, remainingPercent: null }];
 const store = useDesktop(); const quitConfirm = ref(false); const quitError = ref('');
-const titles: Record<string, string> = { quota: '额度总览', clients: '客户端授权', source: '连接与来源', about: '运行状态' };
+const titles: Record<string, string> = { quota: '额度总览',threads:'会话与 Goal',diagnostics:'只读诊断',history:'本应用历史',settings:'设置与外观', clients: '客户端授权', source: '连接与来源',help:'使用说明', about: '运行状态' };
 onMounted(store.start); onUnmounted(store.stop);
-watch(() => store.page, () => window.scrollTo({ top: 0 }));
+watch(() => store.page, () => {void store.cancelPreview();window.scrollTo({ top: 0 });});
 function date(value: unknown) { const parsed = new Date(typeof value === 'number' ? value * 1000 : String(value)); return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString('zh-CN', { hour12: false }) : '未知'; }
 function windowName(name: string, duration?: number | null) { return name === 'five-hour' || duration === 300 ? '5 小时额度' : name === 'weekly' || duration === 10080 ? '每周额度' : name === 'primary' ? '主要额度窗口' : name === 'secondary' ? '次要额度窗口' : name; }
 async function quit() { try { await store.request('app.quit', { expectedInstanceId: store.health.instanceId, confirm: true }, crypto.randomUUID()); } catch (cause) { quitError.value = (cause as Error).message; } }
@@ -38,6 +43,7 @@ async function quit() { try { await store.request('app.quit', { expectedInstance
       </section>
       <section v-show="store.page === 'clients'" aria-labelledby="access-title"><h2 id="access-title">本机客户端</h2><p class="muted">从 CLI 或 MCP 发起配对，核对名称与六位配对码后批准。管理应用权限包含来源配置、退出及更新，请按需选择。</p><p v-if="store.accessError" role="alert">{{ store.accessError }}</p><div id="clients"><ClientCard v-for="client in store.clients" :key="client.id" :client="client" /><p v-if="!store.clients.length" class="panel empty">暂无申请。请从 CLI 或 MCP 发起 access request。</p></div></section>
       <SourceSettings v-if="store.page === 'source'" />
+      <SettingsPage v-if="store.page==='settings'" /><ThreadsPage v-if="store.page==='threads'" /><DiagnosticsPage v-if="store.page==='diagnostics'" /><HistoryPage v-if="store.page==='history'" /><HelpPage v-if="store.page==='help'" />
       <section v-show="store.page === 'about'" class="panel"><h2>本机运行状态</h2><p id="health" role="status">业务进程：{{ store.health.state || '未知' }} · 重启 {{ store.health.restartCount ?? 0 }} 次 · PID {{ store.health.workerPid ?? '无' }}</p><p class="muted">当前支持额度、连接及必要会话状态只读查询；配对授权和现有更新入口继续使用统一服务。</p><p class="muted">托盘菜单可重新打开窗口或明确退出。完全退出后 CLI/MCP 返回离线，不自动启动应用。</p><p class="mono muted">实例 {{ store.health.instanceId || '未知' }}</p></section>
       <footer>CODEX DOG <span>本机运行 · 只读观察</span></footer>
     </main>

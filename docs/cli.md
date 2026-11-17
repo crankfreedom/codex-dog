@@ -4,7 +4,11 @@
 
 ## 当前入口参数
 
-- 阶段 2 当前共 23 项：历史 19 项加 connections.configuration/configure、desktop.show、app.quit；三入口均由 definitions 声明生成/校验，当前签名优先于下方最终设计表。
+- 阶段 3 当前 42 项，API 3 / Schema 3：新增 settings.get/update、quota.policy.get/update、appearance.get/update/presets/preview/cancelPreview、diagnostics.run、events.query/export、operations.get/list/cancel、desktop.status/openDataDirectory、help.get/search；实现签名以能力目录为准，下方 82 项仍为最终设计。
+- settings.get 支持 --section；help.get/search 支持 --topic/--query；operations.get/cancel 支持 --id。也可 --input FILE|-；命名选项与输入文件不能混用。完整示例及范围见 [阶段 3](stage3.md)。
+- 外部客户端需明确申请 settings.manage 才能保存设置或预览；它不包含 app.manage。历史导出普通客户端只管理本人，可信桌面及 app.manage 可管理本机全部导出；本轮 operations.* 不冒充已统一其他模块的内部操作。
+- help.get/search 为包内静态公共说明，CLI/MCP 离线也可用，不读取 profile 或宿主业务；其他能力保持主应用运行及配对要求。
+- 阶段 2 历史为 23 项：历史 19 项加 connections.configuration/configure、desktop.show、app.quit；三入口均由 definitions 声明生成/校验，当前签名优先于下方最终设计表。
 - connections configuration / desktop show 无参数、read；connections configure --input FILE|- 使用 expectedRevision/source/callerThreadId/pipe、app.manage 及幂等键，仅保存下次启动选择。
 - app quit --input FILE|- 使用 expectedInstanceId/confirm=true、app.manage 及幂等键；实例取自 app status。先应答再退出，实际派发前复核撤销；完全离线不拉起。
 - 对应 MCP 工具为 connections_configuration、connections_configure、desktop_show、app_quit，变更的 idempotencyKey 同样位于工具参数，不透传 Shell。详情见 [实施记录](stage2.md) 和 [契约](contracts.md)。

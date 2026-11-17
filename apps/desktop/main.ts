@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, utilityProcess, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, utilityProcess, Tray, Menu, nativeImage,shell } from 'electron';
 import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { writeFile, rename, readFile, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -23,6 +23,8 @@ import { formatStartupDiagnostic } from '../../packages/infrastructure/startup-d
 import { windowsPowerShellEnvironment } from '../../packages/infrastructure/windows-powershell.ts';
 import { SourceConfiguration } from '../../packages/app/source-configuration.ts';
 import { FileSourceStore } from '../../packages/infrastructure/source-store.ts';
+import { AppearancePreview } from '../../packages/app/appearance-preview.ts';
+import { Stage3Error } from '../../packages/modules/persistence/stage3-ports.ts';
 
 const argument = (name: string, fallback: string) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
 let startupStage = 'bootstrap';
@@ -55,9 +57,9 @@ let selection = { source: sourceMode, callerThreadId: argument('codex-caller-thr
 function showWindow() { if (stopping || !window || window.isDestroyed()) return; if (window.isMinimized()) window.restore(); window.show(); window.focus(); }
 const access = new AccessService({ store: new FileAccessStore(join(paths.directory, 'access.json')), now: () => Date.now(), newCode: () => randomBytes(3).toString('hex').toUpperCase(),
   digest: value => createHash('sha256').update(value).digest('hex'), equal: (a, b) => { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); } });
-const runtime = new WorkerSupervisor({ now: () => performance.now(), newId: randomUUID, requestTimeout: 45000, startupTimeout: 45000, spawn: () => {
+const runtime = new WorkerSupervisor({ authorize:(actor,scope)=>{if(stopping)throw new Stage3Error('APP_STOPPING','应用正在退出');access.assertRevision(actor,scope);},now: () => performance.now(), newId: randomUUID, requestTimeout: 45000, startupTimeout: 45000, spawn: () => {
   const child = utilityProcess.fork(join(__dirname, 'worker.cjs'), [], { serviceName: 'Codex Dog business worker', stdio: 'pipe', env: { ...process.env, CODEX_DOG_FIXTURE: scenario,
-    CODEX_DOG_PARENT_PID: String(process.pid), CODEX_DOG_SOURCE: sourceMode, CODEX_DOG_CODEX_PIPE: selection.pipe, CODEX_DOG_CALLER: selection.callerThreadId, CODEX_DOG_CODEX_HOME: argument('codex-home', process.env.CODEX_HOME ?? ''), CODEX_DOG_DATA_DIRECTORY: paths.directory, CODEX_DOG_TEST_HOOKS: testHooks ? '1' : '0', CODEX_DOG_TEST_DELAY_MS: testHooks ? argument('test-delay-ms', '0') : '0' } });
+    CODEX_DOG_PARENT_PID: String(process.pid), CODEX_DOG_SOURCE: sourceMode, CODEX_DOG_CODEX_PIPE: selection.pipe, CODEX_DOG_CALLER: selection.callerThreadId, CODEX_DOG_CODEX_HOME: argument('codex-home', process.env.CODEX_HOME ?? ''), CODEX_DOG_DATA_DIRECTORY: paths.directory, CODEX_DOG_TEST_HOOKS: testHooks ? '1' : '0', CODEX_DOG_TEST_EXPORT_DELAY_MS:testHooks?argument('test-export-delay-ms','5'):'5',CODEX_DOG_TEST_DELAY_MS: testHooks ? argument('test-delay-ms', '0') : '0' } });
   child.stderr?.on('data', () => console.error('业务进程报告错误，请查看诊断状态'));
   return { get pid() { return child.pid; }, send: value => child.postMessage(value), kill: () => { child.kill(); }, onMessage: listener => { child.on('message', listener); }, onExit: listener => { child.once('exit', listener); } };
 } });
@@ -82,7 +84,9 @@ const updates = new UpdateService({ backend: updateBackend, store: new FileUpdat
       catch (error) { app.relaunch({ args: process.argv.slice(1) }); exitAllowed = true; app.exit(1); throw error; }
     },
   } });
-const router = new HostRouter(access, runtime, { runtimeId: instanceId, handlerInstanceId: randomUUID() }, sourceMode, updates, { configuration, desktop: {
+const appearance=new AppearancePreview({newId:randomUUID,visible:()=>!!window&&!window.isDestroyed()&&window.isVisible()&&!stopping,apply:(values,previewId)=>{if(window&&!window.isDestroyed())window.webContents.send('dog:appearance',{values,previewId});},read:async()=>{const result=await runtime.invoke({apiVersion,requestId:randomUUID(),operation:'appearance.get',params:{}},{kind:'desktop',clientId:'desktop',revision:1});if(!result.ok)throw new Error('外观设置读取失败');return result.data as unknown as import('../../packages/modules/persistence/stage3-ports.ts').SettingView;}});
+const router = new HostRouter(access, runtime, { runtimeId: instanceId, handlerInstanceId: randomUUID() }, sourceMode, updates, { configuration,appearance, desktop: {
+  openDataDirectory:async()=>{const error=await shell.openPath(paths.directory);if(error)throw new Error('固定目录无法打开');},
   show: showWindow, quit: finalGuard => { quitTimer ??= setTimeout(() => { quitTimer = undefined; try { finalGuard(); app.quit(); } catch { /* 派发前授权已撤销，取消退出。 */ } }, 400); }, status: () => ({ windowVisible: window?.isVisible() ?? false, trayAvailable: !!tray && !tray.isDestroyed() }),
 } });
 const pipe = new SecurePipeHost({ script: app.isPackaged ? join(process.resourcesPath, 'app.asar.unpacked/out/windows-pipe.ps1') : join(__dirname, 'windows-pipe.ps1'), pipe: paths.pipe, directory: paths.directory, failed: () => { if (!stopping) app.quit(); },
@@ -126,6 +130,7 @@ async function start() {
   startupPhase('window');
   window = new BrowserWindow({ width: 1140, height: 800, minWidth: 840, minHeight: 620, backgroundColor: '#f5f7fa', title: 'Codex Dog · 守码犬', autoHideMenuBar: true, webPreferences: { preload: join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, additionalArguments: testHooks ? ['--g03-test-hooks'] : [] } });
   window.on('close', event => { if (!stopping && !exitAllowed && tray && !tray.isDestroyed()) { event.preventDefault(); window?.hide(); } });
+  window.on('hide',()=>appearance.clear());
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' })); window.webContents.on('will-navigate', event => event.preventDefault());
   const inputSchema = z.object({ operation: z.string(), params: z.record(z.string(), z.unknown()), idempotencyKey: z.string().min(1).max(100).optional() }).strict();
   ipcMain.handle('dog:request', (event, raw: unknown) => {

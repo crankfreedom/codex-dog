@@ -207,3 +207,15 @@ threads.send 仅为显式单次发送，要求目标空闲、无审批/未结束
 来源配置仅含选择参数，不含认证、聊天或额度观察。保存位于当前 SID 保护目录，与配对授权分开；保存前最终复核权限。配置和退出不触发真实业务。托盘关闭窗口仅隐藏，完全退出关闭端点、worker 和安全管道宿主。保存的 caller 优先于环境回退，只有未指定时才使用 CODEX_THREAD_ID；显式启动参数仍优先。
 
 新增操作沿用统一授权、离线/停止及存储错误。配置的主要错误为 INVALID_ARGUMENT、REVISION_CONFLICT、IDEMPOTENCY_CONFLICT、CLIENT_LIMIT、STORAGE_FAILURE；本机请求默认 30 秒客户端超时。退出应答为 accepted，不代表端点已关闭；400 ms 后派发前再次复核 app.manage，若撤销则取消。调用方可用 app.status/离线核对，不因读取失败自动拉起应用。来源配置幂等记录最多 2048 条、当前不自动清理；达到上限拒绝，不丢弃旧键。
+
+## 阶段 3 实施契约（REQ-20261117-04）
+
+- settings.get/update 仅支持 appearance/monitoring；quota.policy.get/update 与 appearance.get/update 为同一分区服务的别名，不另建存储或规则。分区独立正修订，写入须 settings.manage、expectedRevision 与持久幂等键；未知字段/分区拒绝。settings.manage 不授予来源选择、退出或更新权限，已有授权不自动扩权。
+- 外观字段范围沿用上方设计，主题/字体/密度/对比度为固定白名单；appearance.presets 提供完整预设。appearance.preview/cancelPreview 仅当前可见主窗口，settings.manage，预览 ID/所有者绑定；临时预览不写数据库，离页和窗口隐藏撤销，保存才持久化。
+- monitoring：autoRefresh 默认 false，quotaIntervalSeconds 默认 600、10–3600；只影响当前显式来源的只读额度刷新，不运行调度，不修改次数/槽位或自动切换来源。
+- diagnostics.run：read，可带明确 ThreadRef；仅读取当前额度快照、连接、业务存储和调用方授权，目标未选为 not_checked，缺证据 unknown，额度耗尽 blocked；返回逐项与总体状态和观察时刻，不自动刷新额度。
+- events.query：read，from/to/type/reason/limit/cursor；单页最多 200，首次固化上界，游标绑定条件和上界，历史不收录聊天/账号/真实额度/Goal 原文。没有正式任务时不开放任务归档或任务时间线的伪实现。
+- events.export：read，沿用查询条件、最多 20000 条、output 仅安全 JSONL 文件名；写入固定 exports 目录。返回当前客户端拥有的 OperationView；operations.get/list/cancel 仅管理本轮已实现的导出操作：外部普通客户端限本人，可信桌面及显式 app.manage 可管理本用户全部导出，不能透传其他模块内部状态。导出在固定边界读取、逐批检查取消/授权；取消、退出、重启未完成导出或失败均清理本操作临时文件，不产生成功文件，不覆盖已有目标。
+- desktop.status/read 与 desktop.openDataDirectory/app.manage 为固定平台操作，无任意路径或命令。help.get/search 是包内静态说明例外，可在应用离线、未配对时读取；不返回宿主状态或业务缓存。
+- 数据库递增迁移保存设置/脱敏事件/导出操作，仍由 worker 唯一写入；既有 fixture_* 模拟事务与真实只读观察分开。配置和导出操作幂等记录有界，达到上限拒绝，不丢弃未决真值。
+- 新能力仅完成真实实现后注册；API major 3 保持，新增 settings.manage 权限为可选授权，旧客户端须使用配套能力目录，不把未来设计当已实现。

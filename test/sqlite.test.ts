@@ -14,7 +14,7 @@ const intent = { taskId: task.id, expectedRevision: 1, attemptId: 'attempt-1', c
 const unlocked = () => {};
 test('SQLite 构造无副作用；显式启动启用 WAL/外键/版本及关闭后拒绝读取', () => {
   const path = location(); const store = new SqliteStore(path); assert(!existsSync(path)); store.start();
-  try { assert.deepEqual({ ...store.health(), sqliteVersion: '' }, { schemaVersion: 2, journalMode: 'wal', integrity: 'ok', sqliteVersion: '' }); }
+  try { assert.deepEqual({ ...store.health(), sqliteVersion: '' }, { schemaVersion: 3, journalMode: 'wal', integrity: 'ok', sqliteVersion: '' }); }
   finally { store.close(); } assert.throws(() => store.snapshot(), /尚未启动/);
 });
 test('模拟额度经 SQLite 持久化，重启仍读取同一快照，按场景隔离', async () => {
@@ -93,5 +93,5 @@ test('递增迁移失败整体回滚，随后可重试至新版本并保留已�
   db.exec(`PRAGMA application_id=${0x43444733}; PRAGMA user_version=1; CREATE TABLE observations(scenario TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT; CREATE TABLE fixture_tasks(id TEXT PRIMARY KEY,target TEXT NOT NULL UNIQUE,revision INTEGER NOT NULL CHECK(revision>0),count INTEGER NOT NULL CHECK(count>=0),maxCount INTEGER NOT NULL CHECK(maxCount>0 AND count<=maxCount)) STRICT; INSERT INTO fixture_tasks VALUES('old','g03-fixture-old',1,0,3)`); db.close();
   assert.throws(() => new SqliteStore(path, stage => { if (stage === 'migration:2') throw new Error('迁移失败'); }).start(), /迁移失败/);
   const inspect = new DatabaseSync(path, { readOnly: true }); assert.equal(inspect.prepare('PRAGMA user_version').get()!.user_version, 1); assert.equal(inspect.prepare("SELECT count(*) n FROM sqlite_master WHERE name='fixture_attempts'").get()!.n, 0); inspect.close();
-  const store = new SqliteStore(path); store.start(); try { assert.equal(store.health().schemaVersion, 2); assert.equal((store.snapshot().tasks as typeof task[])[0]!.id, 'old'); } finally { store.close(); }
+  const store = new SqliteStore(path); store.start(); try { assert.equal(store.health().schemaVersion, 3); assert.equal((store.snapshot().tasks as typeof task[])[0]!.id, 'old'); } finally { store.close(); }
 });

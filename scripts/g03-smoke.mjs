@@ -56,8 +56,8 @@ async function recovered(oldPid) {
 try {
   assert.equal((await cli(['quota', 'get'])).code, 5);
   await launch(); runtime = await successful({ action: 'health' });
-  assert.equal(runtime.schemaVersion, 2); assert.equal(runtime.journalMode, 'wal'); assert.equal(runtime.integrity, 'ok');
-  mark('实际 Electron utilityProcess 内置 node:sqlite 可用，Schema 2、WAL 和完整性检查通过');
+  assert.equal(runtime.schemaVersion, 3); assert.equal(runtime.journalMode, 'wal'); assert.equal(runtime.integrity, 'ok');
+  mark('实际 Electron utilityProcess 内置 node:sqlite 可用，Schema 3、WAL 和完整性检查通过');
   const registration = await cli(['access', 'request']); assert(registration.value.ok);
   const record = registration.value.data; const card = page.locator(`[data-client-id="${record.id}"]`);
   await page.getByRole('button', { name: '客户端授权', exact: true }).click();
@@ -68,7 +68,7 @@ try {
   transport = new StdioClientTransport({ command: executable, args: ['mcp', 'serve', '--profile', profile, '--client', 'reader'], env: { ...env, PATH: '', NODE_OPTIONS: '' }, stderr: 'pipe' });
   client = new Client({ name: 'g03-validation', version: '1' }); await client.connect(transport); transport.stderr?.resume();
   const mcp = await client.callTool({ name: 'quota_get', arguments: {} }); assert.deepEqual(mcp.structuredContent.data, first.data); assert.equal(mcp.structuredContent.meta.handlerInstanceId, first.meta.handlerInstanceId);
-  assert.equal((await client.listTools()).tools.length, 23);
+  assert.equal((await client.listTools()).tools.length, 42);
   mark('配对后独立 EXE、IPC 与官方 MCP 客户端共用 SQLite 初始化的同一额度快照和处理器');
   assert.equal((await ipc('g03.test')).error.code, 'CAPABILITY_UNSUPPORTED');
   mark('G03 事务探针未注册公开能力目录，普通业务入口不能调用');

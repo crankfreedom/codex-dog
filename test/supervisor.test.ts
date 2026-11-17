@@ -45,3 +45,7 @@ test('读取超时和启动失败均有界，失败不会使请求永久等待',
   const child = new Child(false); const supervisor = new WorkerSupervisor({ spawn: () => child, newId: () => 'x', now: () => 1, startupTimeout: 10, maxRestarts: 0 });
   await assert.rejects(supervisor.start()); await supervisor.stop(); assert(child.killed);
 });
+test('后台导出派发前向唯一授权源复核，撤销和停止原因不会混淆',async()=>{
+  let revoked=false;const f=setup({authorize:()=>{if(revoked)throw Object.assign(new Error(),{code:'APP_STOPPING'});}});await f.supervisor.start();const child=f.children[0]!,sent:Array<{type?:string;allowed?:boolean;code?:string}>=[];const original=child.send.bind(child);child.send=value=>{const message=value as {type?:string;allowed?:boolean;code?:string};if(message.type==='authorized')sent.push(message);else original(value);};
+  child.emit({type:'authorize',id:'guard-1',actor:{kind:'desktop',clientId:'desktop',revision:1},scope:'read'});assert.equal(sent.at(-1)!.allowed,true);revoked=true;child.emit({type:'authorize',id:'guard-2',actor:{kind:'desktop',clientId:'desktop',revision:1},scope:'read'});assert.equal(sent.at(-1)!.allowed,false);assert.equal(sent.at(-1)!.code,'APP_STOPPING');await f.supervisor.stop();
+});

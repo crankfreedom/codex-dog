@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { OperationName, Response } from '../../packages/contracts/protocol.ts';
 
 const bridge = Object.freeze({
+  onAppearance:(callback:(value:unknown)=>void)=>{const listener=(_event:unknown,value:unknown)=>callback(value);ipcRenderer.on('dog:appearance',listener);return()=>ipcRenderer.removeListener('dog:appearance',listener);},
   request: (operation: OperationName, params: Record<string, unknown> = {}, idempotencyKey?: string): Promise<Response> => ipcRenderer.invoke('dog:request', { operation, params, ...(idempotencyKey ? { idempotencyKey } : {}) }),
 });
 contextBridge.exposeInMainWorld('codexDog', bridge);

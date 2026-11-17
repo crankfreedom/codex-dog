@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { stage3Definitions, stage3WorkerOperations,stage3Outputs } from './stage3.ts';
 
 declare const __DOG_BUILD_VERSION__: string;
 export const version = typeof __DOG_BUILD_VERSION__ === 'string' ? __DOG_BUILD_VERSION__ : '0.6.0-g06';
@@ -8,20 +9,21 @@ export const sourceSelection = z.object({ source: z.enum(['fixture', 'live-reado
 export const sourceConfigureParams = sourceSelection.extend({ expectedRevision: z.number().int().positive() }).refine(value => value.source !== 'live-readonly' || !!value.callerThreadId, '真实模式必须明确调用会话');
 export const quitParams = z.object({ expectedInstanceId: z.string().uuid(), confirm: z.literal(true) }).strict();
 export const describeParams = z.object({ operation: z.string().min(1).max(100) }).strict();
-export const scopeSchema = z.enum(['read', 'access.manage', 'app.manage']);
+export const scopeSchema = z.enum(['read', 'access.manage', 'app.manage', 'settings.manage']);
 export type Scope = z.infer<typeof scopeSchema>;
 export const credentialSchema = z.object({ clientId: z.string().uuid(), secret: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 export type Credential = z.infer<typeof credentialSchema>;
-export const accessRequestParams = z.object({ clientLabel: z.string().trim().min(1).max(80), requestedScopes: z.array(scopeSchema).min(1).max(3) }).strict();
-export const accessGrantParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive(), code: z.string().regex(/^[A-F0-9]{6}$/), scopes: z.array(scopeSchema).min(1).max(3), expiresAt: z.string().datetime({ offset: true }).nullable().default(null) }).strict();
+export const accessRequestParams = z.object({ clientLabel: z.string().trim().min(1).max(80), requestedScopes: z.array(scopeSchema).min(1).max(4) }).strict();
+export const accessGrantParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive(), code: z.string().regex(/^[A-F0-9]{6}$/), scopes: z.array(scopeSchema).min(1).max(4), expiresAt: z.string().datetime({ offset: true }).nullable().default(null) }).strict();
 export const accessRevokeParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive() }).strict();
 export const threadRefParams = z.object({ connectionId: z.string().uuid(), threadId: z.string().uuid() }).strict();
 export const threadListParams = z.object({ connectionId: z.string().uuid(), limit: z.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(2000).optional(), archived: z.boolean().default(false) }).strict();
 export const updateDownloadParams = z.object({ candidateId: z.string().uuid(), expectedVersion: z.string().min(1).max(80) }).strict();
 export const updateInstallParams = z.object({ artifactId: z.string().uuid(), expectedVersion: z.string().min(1).max(80), confirm: z.literal(true) }).strict();
 export const liveOperations = new Set(['connections.discover', 'connections.get', 'quota.refresh', 'threads.list', 'threads.get', 'goals.get']);
-export const workerOperations = new Set(['quota.get', ...liveOperations]);
+export const workerOperations = new Set(['quota.get', ...liveOperations, ...stage3WorkerOperations]);
 export const definitions = [
+  ...stage3Definitions,
   { operation: 'connections.configuration', command: ['connections', 'configuration'], tool: 'connections_configuration', description: '读取当前和下次启动的显式来源选择。', input: emptyParams, scope: 'read', readOnly: true },
   { operation: 'connections.configure', command: ['connections', 'configure'], tool: 'connections_configure', description: '保存下次启动的来源选择，当前进程不自动切换；需要应用管理权限。', input: sourceConfigureParams, scope: 'app.manage', readOnly: false },
   { operation: 'desktop.show', command: ['desktop', 'show'], tool: 'desktop_show', description: '显示本应用窗口，应用离线时不拉起。', input: emptyParams, scope: 'read', readOnly: true },
@@ -63,11 +65,17 @@ export function exitCode(result: Response): number {
   if (['INVALID_ARGUMENT', 'INPUT_TOO_LARGE'].includes(result.error.code)) return 2;
   if (['PERMISSION_DENIED', 'AUTH_REQUIRED', 'AUTH_REVOKED'].includes(result.error.code)) return 3;
   if (['APP_NOT_READY', 'APP_STOPPING', 'REVISION_CONFLICT', 'IDEMPOTENCY_CONFLICT', 'PAIRING_EXPIRED', 'CLIENT_LIMIT', 'CONNECTION_IDENTITY_CHANGED', 'TARGET_IDENTITY_MISMATCH', 'GOAL_IDENTITY_CHANGED', 'UPDATE_BUSY', 'UPDATE_VERSION_REJECTED', 'CLI_IN_USE', 'UPDATE_HISTORY_FULL'].includes(result.error.code)) return 4;
-  if (['APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE', 'UPDATE_UNSUPPORTED', 'UPDATE_SOURCE_UNAVAILABLE', 'UPDATE_METADATA_INVALID', 'UPDATE_INTEGRITY_FAILED', 'UPDATE_SIGNATURE_INVALID', 'UPDATE_DOWNLOAD_FAILED', 'UPDATE_INSTALL_FAILED'].includes(result.error.code)) return 5;
+  if (['APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'WINDOW_UNAVAILABLE','OPERATION_NOT_FOUND','EXPORT_TARGET_EXISTS','PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE', 'UPDATE_UNSUPPORTED', 'UPDATE_SOURCE_UNAVAILABLE', 'UPDATE_METADATA_INVALID', 'UPDATE_INTEGRITY_FAILED', 'UPDATE_SIGNATURE_INVALID', 'UPDATE_DOWNLOAD_FAILED', 'UPDATE_INSTALL_FAILED'].includes(result.error.code)) return 5;
   if (result.error.code === 'OPERATION_UNCERTAIN') return 6;
   return 7;
 }
 export function describe(operation: string) {
   const definition = definitions.find(item => item.operation === operation);
-  return definition ? { operation: definition.operation, command: definition.command, mcpTool: definition.tool, description: definition.description, inputSchema: z.toJSONSchema(definition.input), scopes: [definition.scope], readOnly: definition.readOnly, available: true } : undefined;
+  return definition ? { operation: definition.operation, command: definition.command, mcpTool: definition.tool, description: definition.description, inputSchema: {type:'object' as const,...z.toJSONSchema(definition.input)},...(stage3Outputs[operation]?{outputSchema:z.toJSONSchema(stage3Outputs[operation]!),apiVersion,timeoutMs:operation==='diagnostics.run'?45000:10000,idempotency:definition.readOnly?'read-only':['appearance.preview','appearance.cancelPreview'].includes(operation)?'window-scoped':operation==='desktop.openDataDirectory'?'fixed-platform-action':'durable',errors:['INVALID_ARGUMENT','PERMISSION_DENIED','AUTH_REVOKED','APP_NOT_RUNNING','APP_NOT_READY','APP_STOPPING','REVISION_CONFLICT','IDEMPOTENCY_CONFLICT','STORAGE_FAILURE','CLIENT_LIMIT','WINDOW_UNAVAILABLE','OPERATION_NOT_FOUND','EXPORT_TARGET_EXISTS']}:{}), scopes: definition.scope==='public'?[]:[definition.scope], readOnly: definition.readOnly, available: true } : undefined;
+}
+export function mcpInputSchema(operation:string){
+  const definition=definitions.find(x=>x.operation===operation);if(!definition)return undefined;
+  const schema=structuredClone(describe(operation)!.inputSchema) as Record<string,unknown>;
+  const addKey=(value:Record<string,unknown>)=>{value.properties={...(value.properties as Record<string,unknown>??{}),idempotencyKey:{type:'string',minLength:1,maxLength:100}};for(const field of ['anyOf','oneOf'])if(Array.isArray(value[field]))for(const branch of value[field])addKey(branch as Record<string,unknown>);};
+  if(!definition.readOnly)addKey(schema);return schema as {type:'object';[key:string]:unknown};
 }
