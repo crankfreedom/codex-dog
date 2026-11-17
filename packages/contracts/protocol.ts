@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 declare const __DOG_BUILD_VERSION__: string;
-export const version = typeof __DOG_BUILD_VERSION__ === 'string' ? __DOG_BUILD_VERSION__ : '0.5.0-g05';
+export const version = typeof __DOG_BUILD_VERSION__ === 'string' ? __DOG_BUILD_VERSION__ : '0.6.0-g06';
 export const apiVersion = '3';
 export const emptyParams = z.object({}).strict();
 export const describeParams = z.object({ operation: z.string().min(1).max(100) }).strict();
@@ -30,7 +30,7 @@ export const definitions = [
   { operation: 'threads.list', command: ['threads', 'list'], tool: 'threads_list', description: '分页读取本机 Codex 会话身份及状态，不含正文或摘要。', input: threadListParams, scope: 'read', readOnly: true },
   { operation: 'threads.get', command: ['threads', 'get'], tool: 'threads_get', description: '读取会话和最新轮次状态，核对前后 Goal，不含正文。', input: threadRefParams, scope: 'read', readOnly: true },
   { operation: 'goals.get', command: ['goals', 'get'], tool: 'goals_get', description: '只读 Goal 身份及状态，明确未知和无当前 Goal。', input: threadRefParams, scope: 'read', readOnly: true },
-  { operation: 'updates.status', command: ['updates', 'status'], tool: 'updates_status', description: '读取固定 GitHub beta 测试更新状态与持久操作结果。', input: emptyParams, scope: 'read', readOnly: true },
+  { operation: 'updates.status', command: ['updates', 'status'], tool: 'updates_status', description: '读取当前发行通道的固定 GitHub 更新状态与持久操作结果。', input: emptyParams, scope: 'read', readOnly: true },
   { operation: 'updates.check', command: ['updates', 'check'], tool: 'updates_check', description: '检查固定更新仓库，不自动下载或安装。', input: emptyParams, scope: 'read', readOnly: true },
   { operation: 'updates.download', command: ['updates', 'download'], tool: 'updates_download', description: '下载固定候选，返回持久操作 ID。', input: updateDownloadParams, scope: 'app.manage', readOnly: false },
   { operation: 'updates.install', command: ['updates', 'install'], tool: 'updates_install', description: '明确确认安装，先检查 CLI 占用、备份并清理进程。', input: updateInstallParams, scope: 'app.manage', readOnly: false },
@@ -56,7 +56,7 @@ export function exitCode(result: Response): number {
   if (['INVALID_ARGUMENT', 'INPUT_TOO_LARGE'].includes(result.error.code)) return 2;
   if (['PERMISSION_DENIED', 'AUTH_REQUIRED', 'AUTH_REVOKED'].includes(result.error.code)) return 3;
   if (['APP_NOT_READY', 'APP_STOPPING', 'REVISION_CONFLICT', 'IDEMPOTENCY_CONFLICT', 'PAIRING_EXPIRED', 'CLIENT_LIMIT', 'CONNECTION_IDENTITY_CHANGED', 'TARGET_IDENTITY_MISMATCH', 'GOAL_IDENTITY_CHANGED', 'UPDATE_BUSY', 'UPDATE_VERSION_REJECTED', 'CLI_IN_USE', 'UPDATE_HISTORY_FULL'].includes(result.error.code)) return 4;
-  if (['APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE', 'UPDATE_UNSUPPORTED', 'UPDATE_SOURCE_UNAVAILABLE', 'UPDATE_METADATA_INVALID', 'UPDATE_INTEGRITY_FAILED', 'UPDATE_DOWNLOAD_FAILED', 'UPDATE_INSTALL_FAILED'].includes(result.error.code)) return 5;
+  if (['APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE', 'UPDATE_UNSUPPORTED', 'UPDATE_SOURCE_UNAVAILABLE', 'UPDATE_METADATA_INVALID', 'UPDATE_INTEGRITY_FAILED', 'UPDATE_SIGNATURE_INVALID', 'UPDATE_DOWNLOAD_FAILED', 'UPDATE_INSTALL_FAILED'].includes(result.error.code)) return 5;
   if (result.error.code === 'OPERATION_UNCERTAIN') return 6;
   return 7;
 }

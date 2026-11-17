@@ -10,4 +10,4 @@ for (const [name, entry] of Object.entries({ main: 'apps/desktop/main.ts', worke
 await build({ entryPoints: ['apps/desktop/renderer/renderer.ts'], outfile: 'out/renderer/renderer.js', bundle: true, platform: 'browser', format: 'iife', target: 'chrome130' });
 for (const file of ['index.html', 'style.css']) await copyFile(resolve('apps/desktop/renderer', file), resolve('out/renderer', file));
 await copyFile('packages/infrastructure/windows-pipe.ps1', 'out/windows-pipe.ps1');
-console.log('G05 构建完成：独立更新模块及既有业务入口。');
+console.log('G06 构建完成：发行策略、签名门禁及既有统一入口。');

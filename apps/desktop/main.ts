@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, utilityProcess } from 'electron';
 import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { writeFile, rename, readFile, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
@@ -18,14 +18,17 @@ import { UpdateService } from '../../packages/update/service.ts';
 import { UpdateError } from '../../packages/update/ports.ts';
 import { WindowsUpdateBackend } from '../../packages/infrastructure/windows-update-backend.ts';
 import { FileUpdateStore } from '../../packages/infrastructure/update-store.ts';
+import { parseDistribution } from '../../packages/infrastructure/distribution.ts';
 
 const argument = (name: string, fallback: string) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
-const distribution = app.isPackaged ? z.object({ kind: z.literal('g05-test'), profile: z.string().regex(/^g05-install-[a-z0-9-]+$/), repository: z.literal('crankfreedom/codex-dog') }).strict().parse(JSON.parse(readFileSync(join(process.resourcesPath, 'g05-distribution.json'), 'utf8'))) : undefined;
+const distributionFile = app.isPackaged ? join(process.resourcesPath, existsSync(join(process.resourcesPath, 'dog-distribution.json')) ? 'dog-distribution.json' : 'g05-distribution.json') : undefined;
+const distribution = distributionFile ? parseDistribution(JSON.parse(readFileSync(distributionFile, 'utf8'))) : undefined;
 const profile = argument('profile', distribution?.profile ?? 'g02');
 const scenario = argument('fixture', 'available');
 const sourceMode = argument('source', 'fixture');
 if (sourceMode !== 'fixture' && sourceMode !== 'live-readonly') throw new Error('来源模式无效');
-if (distribution && sourceMode !== 'fixture') throw new Error('G05 安装验证包仅允许模拟来源');
+if (distribution && sourceMode !== 'fixture') throw new Error('当前安装发行包仅允许模拟来源');
+if (process.argv.some(a => a.startsWith('--g05-fixture-port=')) && distribution?.kind !== 'g05-test') throw new Error('非 G05 测试包不接受回环更新源');
 const testHooks = sourceMode === 'fixture' && process.argv.includes('--g02-test-hooks');
 if (!['available', 'blocked', 'unknown'].includes(scenario)) throw new Error('模拟场景无效');
 const paths = locations(profile);
@@ -47,8 +50,8 @@ const runtime = new WorkerSupervisor({ now: () => performance.now(), newId: rand
   child.stderr?.on('data', () => console.error('业务进程报告错误，请查看诊断状态'));
   return { get pid() { return child.pid; }, send: value => child.postMessage(value), kill: () => { child.kill(); }, onMessage: listener => { child.on('message', listener); }, onExit: listener => { child.once('exit', listener); } };
 } });
-const updateBackend = new WindowsUpdateBackend({ packaged: app.isPackaged, testDistribution: !!distribution, executable: process.execPath, directory: paths.directory, ...(process.argv.some(a => a.startsWith('--g05-fixture-port=')) ? { fixturePort: Number(argument('g05-fixture-port', '0')) } : {}) });
-const updates = new UpdateService({ backend: updateBackend, store: new FileUpdateStore(join(paths.directory, 'updates.json')), version: app.isPackaged ? app.getVersion() : version, now: Date.now, newId: randomUUID,
+const updateBackend = new WindowsUpdateBackend({ packaged: app.isPackaged, testDistribution: distribution?.kind === 'g05-test', executable: process.execPath, directory: paths.directory, ...(distribution?.kind === 'release' ? { release: { channel: distribution.channel, publisherName: distribution.publisherName, signatureScript: join(process.resourcesPath, 'verify-signature.ps1') } } : {}), ...(process.argv.some(a => a.startsWith('--g05-fixture-port=')) ? { fixturePort: Number(argument('g05-fixture-port', '0')) } : {}) });
+const updates = new UpdateService({ backend: updateBackend, store: new FileUpdateStore(join(paths.directory, 'updates.json')), version: app.isPackaged ? app.getVersion() : version, channel: distribution?.kind === 'release' ? distribution.channel : 'beta', unsignedTestDistribution: distribution?.kind !== 'release', now: Date.now, newId: randomUUID,
   digest: value => createHash('sha256').update(value).digest('hex'), lifecycle: {
     prepare: async installId => {
       await assertCliFree();

@@ -7,26 +7,29 @@ import { basename, dirname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { UpdateError } from '../update/ports.ts';
 import type { UpdateArtifact, UpdateBackendPort, UpdateCandidate } from '../update/ports.ts';
+import { verifyWindowsSignature } from './windows-signature.ts';
 
 export class WindowsUpdateBackend implements UpdateBackendPort {
-  private options: { packaged: boolean; testDistribution: boolean; fixturePort?: number; executable: string; directory: string };
+  private options: { packaged: boolean; testDistribution: boolean; fixturePort?: number; executable: string; directory: string; release?: { channel: 'stable' | 'beta'; publisherName: string; signatureScript: string } };
   private updater?: NsisUpdater;
   private token?: CancellationToken;
   private downloadedBytes = 0;
   constructor(options: WindowsUpdateBackend['options']) { this.options = options; }
-  supported() { return process.platform === 'win32' && this.options.packaged && this.options.testDistribution; }
+  supported() { return process.platform === 'win32' && this.options.packaged && (this.options.testDistribution || !!this.options.release); }
   start() {
     if (!this.supported()) return;
     const port = this.options.fixturePort;
+    if (port !== undefined && !this.options.testDistribution) throw new UpdateError('INVALID_ARGUMENT', '发行包不允许回环更新源');
     if (port !== undefined && (!Number.isInteger(port) || port < 1024 || port > 65535)) throw new UpdateError('INVALID_ARGUMENT', '夹具端口无效');
-    const feed = port === undefined ? { provider: 'github' as const, owner: 'crankfreedom', repo: 'codex-dog', channel: 'beta', private: false } : { provider: 'generic' as const, url: `http://127.0.0.1:${port}/`, channel: 'beta', useMultipleRangeRequest: false };
+    const channel = this.options.release?.channel ?? 'beta';
+    const feed = port === undefined ? { provider: 'github' as const, owner: 'crankfreedom', repo: 'codex-dog', channel: channel === 'stable' ? 'latest' : 'beta', private: false } : { provider: 'generic' as const, url: `http://127.0.0.1:${port}/`, channel: 'beta', useMultipleRangeRequest: false };
     this.updater = new NsisUpdater(feed);
     const config = join(this.options.directory, 'g05-updater-runtime.json');
-    writeFileSync(config, JSON.stringify({ ...feed, updaterCacheDirName: `codex-dog-${basename(this.options.directory)}-${port === undefined ? 'github' : 'fixture'}-updater` }), { mode: 0o600 });
+    writeFileSync(config, JSON.stringify({ ...feed, ...(this.options.release ? { publisherName: [this.options.release.publisherName] } : {}), updaterCacheDirName: `codex-dog-${basename(this.options.directory)}-${channel}-${port === undefined ? 'github' : 'fixture'}-updater` }), { mode: 0o600 });
     this.updater.updateConfigPath = config;
     this.updater.logger = null; this.updater.on('error', () => {});
     this.updater.autoDownload = false; this.updater.autoInstallOnAppQuit = false;
-    this.updater.allowPrerelease = true; this.updater.channel = 'beta'; this.updater.allowDowngrade = false;
+    this.updater.allowPrerelease = channel === 'beta'; this.updater.channel = channel === 'stable' ? 'latest' : 'beta'; this.updater.allowDowngrade = false;
     this.updater.disableDifferentialDownload = true;
     this.updater.on('download-progress', progress => { this.downloadedBytes = Math.max(this.downloadedBytes, progress.transferred); });
   }
@@ -37,7 +40,7 @@ export class WindowsUpdateBackend implements UpdateBackendPort {
       if (!result || !result.isUpdateAvailable) return null;
       const info = result.updateInfo;
       const files = info.files.filter(file => file.url.endsWith('.exe'));
-      const expected = `Codex-Dog-G05-${info.version}-Setup.exe`;
+      const expected = `${this.options.release ? 'Codex-Dog' : 'Codex-Dog-G05'}-${info.version}-Setup.exe`;
       if (files.length !== 1 || files[0]!.url !== expected || typeof files[0]!.sha512 !== 'string' || !/^[A-Za-z0-9+/]{86}==$/.test(files[0]!.sha512) || !Number.isSafeInteger(files[0]!.size) || Number(files[0]!.size) < 1 || Number(files[0]!.size) > 1024 * 1024 * 1024) throw new UpdateError('UPDATE_METADATA_INVALID', '安装包元数据不完整或来源路径异常');
       return { version: info.version, fileName: expected, sha512: files[0]!.sha512, size: files[0]!.size! };
     } catch (error) { if (error instanceof UpdateError) throw error; throw new UpdateError('UPDATE_SOURCE_UNAVAILABLE', 'GitHub/夹具更新元数据不可用'); }
@@ -59,10 +62,11 @@ export class WindowsUpdateBackend implements UpdateBackendPort {
   }
   async verify(artifact: UpdateArtifact) {
     try {
-      if (basename(artifact.path) !== `Codex-Dog-G05-${artifact.version}-Setup.exe` || (await stat(artifact.path)).size !== artifact.size) throw new Error('路径/大小异常');
+      if (basename(artifact.path) !== `${this.options.release ? 'Codex-Dog' : 'Codex-Dog-G05'}-${artifact.version}-Setup.exe` || (await stat(artifact.path)).size !== artifact.size) throw new Error('路径/大小异常');
       const hash = createHash('sha512'); for await (const chunk of createReadStream(artifact.path)) hash.update(chunk);
       if (hash.digest('base64') !== artifact.sha512) throw new Error('哈希变化');
     } catch { throw new UpdateError('UPDATE_INTEGRITY_FAILED', '缓存安装包校验失败，旧程序继续运行'); }
+    if (this.options.release) await verifyWindowsSignature(this.options.release.signatureScript, artifact.path, this.options.release.publisherName);
   }
   async launchInstaller(artifact: UpdateArtifact, finalGuard: () => void) {
     await this.verify(artifact);

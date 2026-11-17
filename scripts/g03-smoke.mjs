@@ -118,6 +118,6 @@ try {
   mark('隔离数据库改为未来版本后实际主应用拒绝开放服务，不覆盖数据库或发布端点');
   assert.deepEqual(pageErrors, []);
   await mkdir(reportDirectory, { recursive: true });
-  const report = { result: 'passed', createdAt: new Date().toISOString(), version, apiVersion: '3', dataSource: 'fixture', runtime, nodeTestRuntime: process.versions.node, checks, pageErrors, realCodexConnections: 0, scope: `G03 regression under ${version}; other gates evaluated separately`, legacyLockEvidence: 'node --test test/target-lease.test.ts; original FileJournal in isolated child processes; no real lock directory', automaticStaleLockReclaim: false };
+  const report = { result: 'passed', createdAt: new Date().toISOString(), version, apiVersion: '3', dataSource: 'fixture', runtime, nodeTestRuntime: process.versions.node, checks, pageErrors, realCodexConnections: 0, scope: `G03 regression under ${version}; other gates evaluated separately`, legacyLockEvidence: '原始 FileJournal 仅在旧源码可用时由 target-lease 单元测试验证；须检查其 TAP 是否跳过，本脚本不证明旧源码互操作', automaticStaleLockReclaim: false };
   await writeFile(`${reportDirectory}/report.json`, JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2));
 } finally { await client?.close().catch(() => {}); await transport?.close().catch(() => {}); await desktop?.close().catch(() => {}); }

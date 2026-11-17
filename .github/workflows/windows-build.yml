@@ -1,0 +1,79 @@
+name: Windows 发行准备（仅构建）
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: preview 无签名隔离包；signed-beta 须先配置签名环境
+        required: true
+        type: choice
+        options: [preview, signed-beta]
+        default: preview
+      version:
+        description: 构建版本，例如 0.6.0-beta.1；不创建标签或 Release
+        required: true
+        type: string
+        default: 0.6.0-beta.1
+permissions:
+  contents: read
+concurrency:
+  group: windows-build-${{ inputs.mode }}
+  cancel-in-progress: false
+jobs:
+  package:
+    if: inputs.mode == 'preview' || (github.ref == 'refs/heads/main' && github.repository == 'crankfreedom/codex-dog')
+    runs-on: windows-2025
+    timeout-minutes: 45
+    environment: ${{ inputs.mode == 'signed-beta' && 'codex-dog-signing' || 'codex-dog-preview' }}
+    env:
+      DOG_RELEASE_MODE: ${{ inputs.mode }}
+      DOG_RELEASE_VERSION: ${{ inputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.20.0
+          run_install: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.7.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+      - run: pnpm check:boundaries
+      - run: pnpm check:docs
+      - run: pnpm check:release
+      - name: 验证签名环境确有审批保护
+        if: inputs.mode == 'signed-beta'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-release.mjs --environment
+      - name: 构建（固定 publish=never）
+        env:
+          DOG_SIGNING_ENABLED: ${{ vars.DOG_SIGNING_ENABLED }}
+          DOG_PUBLISHER_NAME: ${{ vars.DOG_PUBLISHER_NAME }}
+          DOG_AZURE_ENDPOINT: ${{ vars.DOG_AZURE_ENDPOINT }}
+          DOG_AZURE_ACCOUNT: ${{ vars.DOG_AZURE_ACCOUNT }}
+          DOG_AZURE_CERTIFICATE_PROFILE: ${{ vars.DOG_AZURE_CERTIFICATE_PROFILE }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ inputs.mode == 'signed-beta' && secrets.AZURE_CLIENT_SECRET || '' }}
+        run: pnpm release:build
+      - name: 验证预览安装版
+        if: inputs.mode == 'preview'
+        run: pnpm test:g06
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: codex-dog-${{ inputs.mode }}-${{ github.run_id }}
+          path: |
+            release/g06/**/Codex-Dog-*-Setup.exe
+            release/g06/**/beta.yml
+            artifacts/g06/package.json
+            artifacts/g06/preview-report.json
+          if-no-files-found: error
+          retention-days: 7

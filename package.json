@@ -1,7 +1,7 @@
 {
   "name": "codex-dog",
   "productName": "Codex Dog",
-  "version": "0.5.0-g05",
+  "version": "0.6.0-g06",
   "private": true,
   "type": "module",
   "main": "out/main.cjs",
@@ -17,7 +17,7 @@
     "cli": "node out/cli.cjs",
     "pack:cli": "node scripts/pack-cli.mjs",
     "install:electron": "node node_modules/electron/install.js",
-    "test": "node --test test/*.test.ts",
+    "test": "node --test test/*.test.ts test/*.test.mjs",
     "test:g01": "node scripts/g02-smoke.mjs --g01-only",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:docs": "node scripts/check-docs.mjs",
@@ -25,7 +25,11 @@
     "test:g03": "node scripts/g03-smoke.mjs",
     "test:g04": "node scripts/g04-smoke.mjs",
     "pack:g05": "node scripts/package-g05.mjs",
-    "test:g05": "node scripts/g05-smoke.mjs"
+    "test:g05": "node scripts/g05-smoke.mjs",
+    "release:check": "node scripts/package-release.mjs --check",
+    "release:build": "node scripts/package-release.mjs",
+    "check:release": "node scripts/check-release.mjs",
+    "test:g06": "node scripts/g06-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -41,8 +45,9 @@
     "electron": "45.0.0",
     "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "yaml": "2.9.1"
   },
-  "description": "Codex Dog 独立桌面管理工具（G05 测试）",
+  "description": "Codex Dog 独立桌面管理工具（G06 发行准备）",
   "author": "crankfreedom"
 }

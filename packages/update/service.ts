@@ -4,7 +4,7 @@ import type { UpdateBackendPort, UpdateCandidate, UpdateLifecyclePort, UpdateOpe
 
 export class UpdateService {
   private state: UpdateState;
-  private options: { backend: UpdateBackendPort; store: UpdateStorePort; lifecycle: UpdateLifecyclePort; version: string; newId(): string; digest(value: string): string; now(): number };
+  private options: { backend: UpdateBackendPort; store: UpdateStorePort; lifecycle: UpdateLifecyclePort; version: string; channel?: 'beta' | 'stable'; unsignedTestDistribution?: boolean; newId(): string; digest(value: string): string; now(): number };
   private tail: Promise<unknown> = Promise.resolve();
   private active?: Promise<void>;
   private closing = false;
@@ -24,7 +24,7 @@ export class UpdateService {
     if (changed) { this.state.phase = this.state.operations.at(-1)?.state === 'succeeded' ? 'idle' : 'failed'; this.state.error = this.state.operations.at(-1)?.error ?? null; this.state.artifact = null; await this.options.store.save(this.state); }
   }
   status() {
-    return { supported: this.options.backend.supported(), platform: 'win32', channel: 'beta', repository: 'crankfreedom/codex-dog', currentVersion: this.options.version, phase: this.state.phase, candidate: structuredClone(this.state.candidate), artifact: this.state.artifact ? { id: this.state.artifact.id, version: this.state.artifact.version } : null, operations: this.state.operations.slice(-20).map(o => ({ id: o.id, kind: o.kind, state: o.state, version: o.version, at: o.at, error: o.error })), error: this.state.error, unsignedTestDistribution: true, backend: this.options.backend.diagnostics?.() ?? null };
+    return { supported: this.options.backend.supported(), platform: 'win32', channel: this.options.channel ?? 'beta', repository: 'crankfreedom/codex-dog', currentVersion: this.options.version, phase: this.state.phase, candidate: structuredClone(this.state.candidate), artifact: this.state.artifact ? { id: this.state.artifact.id, version: this.state.artifact.version } : null, operations: this.state.operations.slice(-20).map(o => ({ id: o.id, kind: o.kind, state: o.state, version: o.version, at: o.at, error: o.error })), error: this.state.error, unsignedTestDistribution: this.options.unsignedTestDistribution ?? true, backend: this.options.backend.diagnostics?.() ?? null };
   }
   private ready() { if (this.closing) throw new UpdateError('APP_STOPPING', '更新模块正在退出'); if (!this.options.backend.supported()) throw new UpdateError('UPDATE_UNSUPPORTED', '仅独立 Windows G05 安装测试包支持更新'); }
   private mutate<T>(work: (state: UpdateState) => T): Promise<T> {
@@ -35,7 +35,8 @@ export class UpdateService {
     this.ready(); if (this.active) throw new UpdateError('UPDATE_BUSY', '更新操作尚未结束');
     try {
       const found = await this.options.backend.check();
-      if (found && (!valid(found.version) || !gt(found.version, this.options.version) || !/^\d+\.\d+\.\d+-beta\.\d+$/.test(found.version))) throw new UpdateError('UPDATE_VERSION_REJECTED', '拒绝非 beta、同版或降级候选');
+      const allowed = this.options.channel === 'stable' ? /^\d+\.\d+\.\d+$/ : /^\d+\.\d+\.\d+-beta\.\d+$/;
+      if (found && (!valid(found.version) || !gt(found.version, this.options.version) || !allowed.test(found.version))) throw new UpdateError('UPDATE_VERSION_REJECTED', '拒绝跨通道、同版或降级候选');
       await this.mutate(next => {
         const same = found && next.candidate?.version === found.version && next.candidate?.sha512 === found.sha512;
         next.candidate = found ? { ...found, id: same ? next.candidate!.id : this.options.newId() } : null;
