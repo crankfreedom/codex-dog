@@ -17,15 +17,16 @@ export const settingsUpdate = z.discriminatedUnion('section',[appearanceUpdate.e
 export const settingsGet = z.object({ section:z.enum(['appearance','monitoring']) }).strict();
 export const previewInput = appearanceUpdate.extend({ previewId:z.string().uuid().optional() });
 export const cancelPreviewInput = z.object({ previewId:z.string().uuid() }).strict();
-export const eventKinds = ['runtime.started','runtime.stopping','settings.updated','export.completed','export.cancelled','export.failed'] as const;
+export const eventKinds = ['runtime.started','runtime.stopping','settings.updated','export.completed','export.cancelled','export.failed','tasks.create','tasks.enable','tasks.pause','tasks.update','tasks.remove','task.observed','templates.create','templates.update','templates.delete','templates.setDefault','delivery.prepared','delivery.submitted','delivery.uncertain','delivery.turn_finished','resetAppointments.create','resetAppointments.cancel','reset.claimed','reset.succeeded','reset.failed','reset.uncertain','reset.missed'] as const;
 export const eventReasons = ['fixture','live-readonly','appearance','monitoring','completed','cancelled','AUTH_REVOKED','APP_STOPPING','PROCESS_INTERRUPTED','STORAGE_FAILURE','EXPORT_TARGET_EXISTS'] as const;
-export const historyFilter = { from:z.string().datetime({offset:true}).optional(),to:z.string().datetime({offset:true}).optional(),type:z.enum(eventKinds).optional(),reason:z.enum(eventReasons).optional() };
+export const historyFilter = { from:z.string().datetime({offset:true}).optional(),to:z.string().datetime({offset:true}).optional(),type:z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/).optional(),reason:z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/).optional(),taskId:z.string().uuid().optional() };
 export const eventQuery = z.object({...historyFilter,limit:z.number().int().min(1).max(200).default(50),cursor:z.string().min(1).max(1500).optional()}).strict().refine(v=>!v.from||!v.to||Date.parse(v.from)<=Date.parse(v.to));
+export const eventSubscribe = z.object({...historyFilter,limit:z.number().int().min(1).max(200).default(50),cursor:z.string().min(1).max(1500).optional()}).strict().refine(v=>!v.from||!v.to||Date.parse(v.from)<=Date.parse(v.to));
 export const eventExport = z.object({...historyFilter,limit:z.number().int().min(1).max(20000).default(20000),output:z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}\.jsonl$/).optional()}).strict().refine(v=>!v.from||!v.to||Date.parse(v.from)<=Date.parse(v.to));
 export const operationRef = z.object({id:z.string().uuid()}).strict();
 const empty = z.object({}).strict();
 export const diagnosticInput = z.object({ threadRef:z.object({connectionId:z.string().uuid(),threadId:z.string().uuid()}).strict().optional() }).strict();
-export const helpGet = z.object({ topic:z.enum(['overview','sources','pairing','quota','threads','settings','diagnostics','history','limits']).default('overview') }).strict();
+export const helpGet = z.object({ topic:z.enum(['overview','sources','pairing','quota','threads','settings','diagnostics','history','tasks','delivery','cards','notifications','updates','limits']).default('overview') }).strict();
 export const helpSearch = z.object({ query:z.string().trim().min(1).max(80),limit:z.number().int().min(1).max(20).default(10) }).strict();
 export const stage3Definitions = [
   {operation:'settings.get',command:['settings','get'],tool:'settings_get',description:'读取已实现的本应用设置分区、修订和允许字段。',input:settingsGet,scope:'read',readOnly:true},
@@ -39,6 +40,7 @@ export const stage3Definitions = [
   {operation:'appearance.cancelPreview',command:['appearance','cancel-preview'],tool:'appearance_cancel_preview',description:'撤销自己窗口的临时预览，恢复已保存外观。',input:cancelPreviewInput,scope:'settings.manage',readOnly:false},
   {operation:'diagnostics.run',command:['diagnostics','run'],tool:'diagnostics_run',description:'读取当前连接、额度快照、存储和明确目标的诊断，不刷新额度或推进调度。',input:diagnosticInput,scope:'read',readOnly:true},
   {operation:'events.query',command:['events','query'],tool:'events_query',description:'按固定边界查询本应用实际脱敏历史，游标绑定查询条件。',input:eventQuery,scope:'read',readOnly:true},
+  {operation:'events.subscribe',command:['events','subscribe'],tool:'events_subscribe',description:'读取至多 200 条脱敏事件及可恢复订阅游标；追平当前固定边界后再前进，不保留无界客户端队列，不推进调度。',input:eventSubscribe,scope:'read',readOnly:true},
   {operation:'events.export',command:['events','export'],tool:'events_export',description:'在固定 exports 目录导出有界 JSONL，不覆盖文件，支持取消。',input:eventExport,scope:'read',readOnly:false},
   {operation:'operations.get',command:['operations','get'],tool:'operations_get',description:'查询授权范围内的历史导出操作，不透传模块内部状态。',input:operationRef,scope:'read',readOnly:true},
   {operation:'operations.list',command:['operations','list'],tool:'operations_list',description:'查询本人导出；可信桌面及 app.manage 可核对本机全部导出。',input:z.object({limit:z.number().int().min(1).max(100).default(20)}).strict(),scope:'read',readOnly:true},
@@ -50,8 +52,10 @@ export const stage3Definitions = [
 ] as const;
 export const stage3WorkerOperations = new Set<string>(stage3Definitions.filter(d=>!d.operation.startsWith('help.')&&!d.operation.startsWith('desktop.')&&!['appearance.preview','appearance.cancelPreview'].includes(d.operation)).map(d=>d.operation));
 const settingOutput=z.discriminatedUnion('section',[z.object({section:z.literal('appearance'),revision,values:appearanceSchema}).strict(),z.object({section:z.literal('monitoring'),revision,values:monitoringSchema}).strict()]);
-const historyEventOutput=z.object({sequence:revision,at:z.string().datetime(),type:z.enum(eventKinds),reason:z.enum(eventReasons),source:z.literal('local'),revision:revision.nullable()}).strict();
+const historyEventOutput=z.object({sequence:revision,at:z.string().datetime(),type:z.string().max(100),reason:z.string().max(100),source:z.literal('local'),revision:revision.nullable(),resourceId:z.string().max(100).nullable().optional()}).strict();
 const operationOutput=z.object({id:z.string().uuid(),kind:z.literal('events.export'),state:z.enum(['accepted','running','succeeded','failed','cancelled']),createdAt:z.string().datetime(),updatedAt:z.string().datetime(),boundary:z.number().int().nonnegative(),written:z.number().int().nonnegative(),fileName:z.string().nullable(),error:z.string().max(80).nullable(),cancelRequested:z.boolean()}).strict();
+const businessOperationOutput=z.object({id:z.string().uuid(),kind:z.enum(['scheduler.runNow','updates.download','updates.install']),state:z.enum(['accepted','running','succeeded','failed','cancelled','awaiting_restart']),createdAt:z.string().datetime(),updatedAt:z.string().datetime(),error:z.string().nullable(),resultCount:z.number().int().nonnegative().nullable().optional(),expectedVersion:z.string().optional()}).strict();
+const anyOperationOutput=z.union([operationOutput,businessOperationOutput]);
 const topicOutput=z.object({id:z.string(),title:z.string(),text:z.string()}).strict();
 const diagnosticOutput=z.object({status:z.enum(['passed','blocked','unknown']),checks:z.array(z.object({id:z.string(),status:z.enum(['passed','blocked','unknown','not_checked']),reason:z.string().max(100),source:z.enum(['local','fixture','live'])}).strict()),mode:z.enum(['fixture','live-readonly']),source:z.enum(['fixture','live']),observedAt:z.string().datetime(),stale:z.literal(false),completionConfirmed:z.literal(false),readOnly:z.literal(true),hostState:z.string().optional()}).strict();
 export const stage3Outputs:Record<string,z.ZodType>={
@@ -64,7 +68,8 @@ export const stage3Outputs:Record<string,z.ZodType>={
   'appearance.cancelPreview':z.object({cancelled:z.literal(true),previewId:z.string().uuid()}).strict(),
   'diagnostics.run':diagnosticOutput,
   'events.query':z.object({items:z.array(historyEventOutput).max(200),boundary:z.number().int().nonnegative(),nextCursor:z.string().nullable(),source:z.literal('local'),observedAt:z.string().datetime(),stale:z.literal(false)}).strict(),
-  'events.export':operationOutput,'operations.get':operationOutput,'operations.cancel':operationOutput,'operations.list':z.object({items:z.array(operationOutput).max(100)}).strict(),
+  'events.subscribe':z.object({items:z.array(historyEventOutput).max(200),boundary:z.number().int().nonnegative(),nextCursor:z.string().min(1).max(1500),caughtUp:z.boolean(),source:z.literal('local'),observedAt:z.string().datetime(),stale:z.literal(false)}).strict(),
+  'events.export':operationOutput,'operations.get':anyOperationOutput,'operations.cancel':anyOperationOutput,'operations.list':z.object({items:z.array(anyOperationOutput).max(100)}).strict(),
   'desktop.status':z.object({windowVisible:z.boolean(),trayAvailable:z.boolean(),supported:z.literal(true)}).strict(),'desktop.openDataDirectory':z.object({opened:z.literal(true)}).strict(),
   'help.get':z.object({topic:topicOutput,source:z.literal('package-static'),hostStateIncluded:z.literal(false)}).strict(),
   'help.search':z.object({items:z.array(topicOutput),source:z.literal('package-static'),hostStateIncluded:z.literal(false)}).strict(),

@@ -4,7 +4,7 @@ import { mkdtemp,readFile,readdir,writeFile,symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash,randomUUID } from 'node:crypto';
-import { SqliteStore } from '../packages/infrastructure/sqlite-store.ts';
+import { SqliteStore,currentSchema } from '../packages/infrastructure/sqlite-store.ts';
 import { SettingsService } from '../packages/modules/settings/service.ts';
 import { HistoryService } from '../packages/modules/history/service.ts';
 import { LocalHistoryFiles,HistoryCursorCodec } from '../packages/infrastructure/history-files.ts';
@@ -28,10 +28,10 @@ test('设置构造无 I/O，白名单及字号范围、二十种主题均有实�
 });
 test('Schema 2 到 3 迁移失败整体回滚，原模拟真值保留，重试后得到完整新结构',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'dog-stage3-migration-')),path=join(directory,'app.sqlite');let store=new SqliteStore(path);store.start();store.createFixtureTask({id:'old-task',target:'fixture-migration',revision:1,count:0,maxCount:3});store.close();
-  const old=new DatabaseSync(path);old.exec('DROP TABLE app_settings;DROP TABLE app_setting_operations;DROP TABLE app_events;DROP TABLE app_history_meta;DROP TABLE app_exports;DROP TABLE app_export_cancellations;PRAGMA user_version=2;');old.close();
+  const old=new DatabaseSync(path);old.exec('DROP TABLE fixture_card_receipts;DROP TABLE fixture_delivery_receipts;DROP TABLE automation_state;DROP TABLE app_settings;DROP TABLE app_setting_operations;DROP TABLE app_events;DROP TABLE app_history_meta;DROP TABLE app_exports;DROP TABLE app_export_cancellations;PRAGMA user_version=2;');old.close();
   assert.throws(()=>new SqliteStore(path,stage=>{if(stage==='migration:3')throw new Error('迁移失败');}).start());
   const inspect=new DatabaseSync(path,{readOnly:true});assert.equal(inspect.prepare('PRAGMA user_version').get()!.user_version,2);assert.equal(inspect.prepare("SELECT count(*) n FROM sqlite_master WHERE name='app_settings'").get()!.n,0);assert.equal(inspect.prepare('SELECT count FROM fixture_tasks WHERE id=?').get('old-task')!.count,0);inspect.close();
-  store=new SqliteStore(path);store.start();try{assert.equal(store.health().schemaVersion,3);assert.equal((store.snapshot().tasks as Array<{id:string}>)[0]!.id,'old-task');assert.deepEqual(store.readSetting('appearance').values,defaultAppearance);}finally{store.close();}
+  store=new SqliteStore(path);store.start();try{assert.equal(store.health().schemaVersion,currentSchema);assert.equal((store.snapshot().tasks as Array<{id:string}>)[0]!.id,'old-task');assert.deepEqual(store.readSetting('appearance').values,defaultAppearance);}finally{store.close();}
 });
 test('损坏的设置内容失败关闭，不以默认值覆盖原记录',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'dog-stage3-corrupt-')),path=join(directory,'app.sqlite');let store=new SqliteStore(path);store.start();store.close();const writer=new DatabaseSync(path);const invalid=JSON.stringify({...defaultAppearance,bodySize:999});writer.prepare('UPDATE app_settings SET payload=? WHERE section=?').run(invalid,'appearance');writer.close();store=new SqliteStore(path);store.start();try{assert.throws(()=>new SettingsService(store,Date.now,digest).start(),code('STORAGE_FAILURE'));assert.equal(store.readSetting('appearance').values.bodySize,999);}finally{store.close();}
@@ -80,5 +80,5 @@ test('外观预览独立于持久设置，离页/隐藏可撤销，所有权和�
   visible=false;await assert.rejects(controller.preview({expectedRevision:1,patch:{bodySize:20}},actor,'hidden',()=>{}),code('WINDOW_UNAVAILABLE'));
 });
 test('静态帮助不冒充宿主能力，MCP 分区联合 Schema 保留 object 根和幂等键',()=>{
-  assert.equal(readStaticHelp('help.get',{topic:'limits'}).hostStateIncluded,false);assert((readStaticHelp('help.search',{query:'导出'}) as {items:unknown[]}).items.length>0);const schema=mcpInputSchema('settings.update')!;assert.equal(schema.type,'object');assert(schema.anyOf||schema.oneOf);assert.equal(new Set(definitions.map(x=>x.tool)).size,definitions.length);assert.equal(definitions.length,42);
+  assert.equal(readStaticHelp('help.get',{topic:'limits'}).hostStateIncluded,false);assert((readStaticHelp('help.search',{query:'导出'}) as {items:unknown[]}).items.length>0);const schema=mcpInputSchema('settings.update')!;assert.equal(schema.type,'object');assert(schema.anyOf||schema.oneOf);assert.equal(new Set(definitions.map(x=>x.tool)).size,definitions.length);assert(definitions.length>=42);
 });

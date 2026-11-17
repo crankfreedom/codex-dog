@@ -50,7 +50,7 @@ export class CodexReadonlyService {
       return { name: index ? 'secondary' : 'primary', usedPercent: percent ?? null, remainingPercent: typeof percent === 'number' ? 100 - percent : null, resetsAt: raw.resetsAt ?? null, windowDurationMins: typeof raw.windowDurationMins === 'number' ? raw.windowDurationMins : null };
     });
     const blocked = value.spendControlReached === true || !!value.rateLimitReachedType || quota.ordinaryUsageAllowed === false || windows.some(w => w.usedPercent !== null && Number(w.usedPercent) >= 100);
-    const unknown = windows.some(w => w.usedPercent === null);
+    const unknown = windows.some(w => w.usedPercent === null)||quota.ordinaryUsageAllowed!==true;
     return { source: this.options.source ?? 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionId: this.connectionId, connectionRevision: this.revision, available: blocked ? false : unknown ? null : true, reason: blocked ? 'quota_exhausted' : unknown ? 'quota_unknown' : 'quota_available', windows };
   }
   async refresh(): Promise<Record<string, unknown>> {
@@ -96,7 +96,9 @@ export class CodexReadonlyService {
       if (JSON.stringify(before) !== JSON.stringify(after)) throw new ReadError('GOAL_IDENTITY_CHANGED', '读取期间 Goal 身份或状态已变化');
       let latestTurn: { id: string; status: string } | null = null;
       if (raw.turns.length) { const turn = object(raw.turns[0]); if (typeof turn.id !== 'string' || typeof turn.status !== 'string') throw new ReadError('PROVIDER_SCHEMA_UNSUPPORTED', '最新轮次状态无效'); latestTurn = { id: turn.id, status: turn.status }; }
-      return { connectionId: this.connectionId, threadId, status: status.type, statusKnown: knownStates.has(status.type), activeFlags: status.activeFlags ?? [], latestTurn, goal: after, source: this.options.source ?? 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionRevision: this.revision, completionConfirmed: false, goalAccountBindingVerified: false };
+      const latestError=raw.turns.length?object(raw.turns[0]).error:undefined;
+      const isQuotaError=(value:unknown,depth=0):boolean=>{if(depth>3||!value||typeof value!=='object'||Array.isArray(value))return false;const fields=value as Record<string,unknown>;return ['code','type','kind','codexErrorInfo'].some(key=>typeof fields[key]==='string'&&String(fields[key]).replace(/[_\-\s]/g,'').toLowerCase()==='usagelimitexceeded'||fields[key]&&typeof fields[key]==='object'&&(Object.keys(fields[key] as object).some(tag=>tag.replace(/[_\-\s]/g,'').toLowerCase()==='usagelimitexceeded')||isQuotaError(fields[key],depth+1)));};
+      return { connectionId: this.connectionId, threadId, status: status.type, statusKnown: knownStates.has(status.type), activeFlags: status.activeFlags ?? [], latestTurn,latestTurnQuotaError:latestTurn?.status==='failed'&&isQuotaError(latestError), goal: after, source: this.options.source ?? 'live', observedAt: new Date(this.options.now()).toISOString(), stale: false, connectionRevision: this.revision, completionConfirmed: false, goalAccountBindingVerified: false };
     });
   }
   async thread(params: Record<string, unknown>) { return this.inspect(params); }

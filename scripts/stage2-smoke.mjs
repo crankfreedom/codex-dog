@@ -1,3 +1,4 @@
+import {definitions} from '../packages/contracts/protocol.ts';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
@@ -63,7 +64,7 @@ try {
   assert.equal((await cli(['connections', 'configure', '--input', '-'], { expectedRevision: 1, source: 'fixture', callerThreadId: '', pipe: '' })).value.error.code, 'PERMISSION_DENIED');
   transport = new StdioClientTransport({ command: cliPath, args: ['mcp', 'serve', '--profile', profile, '--client', 'reader'], env: { ...env, PATH: '', NODE_OPTIONS: '' }, stderr: 'pipe' });
   mcp = new Client({ name: 'stage2-acceptance', version: '1' }); await mcp.connect(transport); transport.stderr?.resume();
-  assert.equal((await mcp.listTools()).tools.length, 42); const initial = good(await ipc('quota.get'));
+  assert.equal((await mcp.listTools()).tools.length, definitions.length); const initial = good(await ipc('quota.get'));
   assert.deepEqual(good((await cli(['quota', 'get'])).value), initial); assert.deepEqual(good((await mcp.callTool({ name: 'quota_get', arguments: {} })).structuredContent), initial);
   mark('桌面配对、CLI/MCP 统一读取及默认 read 权限保持，不能自授来源配置权限');
   const manager = good((await cli(['access', 'request', '--input', '-'], { clientLabel: 'stage2-manager', requestedScopes: ['read', 'app.manage'] }, 'manager')).value);

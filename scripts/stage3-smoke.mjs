@@ -1,3 +1,4 @@
+import {definitions} from '../packages/contracts/protocol.ts';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -28,7 +29,7 @@ try{
  mark('离线静态帮助和业务离线明确分离，不启动应用或创建 profile');
  await launch();const manager=await pair('manager',['read','settings.manage']);const reader=await pair('reader',['read']);
  assert.equal((await cli(['settings','update','--input','-','--idempotency-key','deny'],{section:'appearance',expectedRevision:1,patch:{bodySize:18}},'reader')).value.error.code,'PERMISSION_DENIED');
- transport=new StdioClientTransport({command:cliPath,args:['mcp','serve','--profile',profile,'--client','manager','--timeout-ms','60000'],env:{...env,PATH:'',NODE_OPTIONS:''},stderr:'pipe'});mcp=new Client({name:'stage3-acceptance',version:'1'});await mcp.connect(transport);transport.stderr?.resume();assert.equal((await mcp.listTools()).tools.length,42);
+ transport=new StdioClientTransport({command:cliPath,args:['mcp','serve','--profile',profile,'--client','manager','--timeout-ms','60000'],env:{...env,PATH:'',NODE_OPTIONS:''},stderr:'pipe'});mcp=new Client({name:'stage3-acceptance',version:'1'});await mcp.connect(transport);transport.stderr?.resume();assert.equal((await mcp.listTools()).tools.length,definitions.length);
  const patch={section:'appearance',expectedRevision:1,patch:{bodySize:18}};const saved=good((await cli(['settings','update','--input','-','--idempotency-key','appearance-save'],patch)).value);assert.equal(saved.revision,2);
  const repeated=good((await mcp.callTool({name:'settings_update',arguments:{...patch,idempotencyKey:'appearance-save'}})).structuredContent);assert.deepEqual(repeated,saved);assert.equal(good(await ipc('settings.get',{section:'monitoring'})).revision,1);
  assert.equal((await cli(['settings','update','--input','-','--idempotency-key','stale'],patch)).value.error.code,'REVISION_CONFLICT');assert.deepEqual(good(await ipc('settings.get',{section:'appearance'})),saved);

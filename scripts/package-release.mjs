@@ -36,7 +36,7 @@ try {
     npmRebuild: false, asar: true, asarUnpack: ['out/windows-pipe.ps1'], files: ['out/**', 'package.json', '!out/*.meta.json'], compression: 'normal',
     forceCodeSigning: policy.signing.forceCodeSigning,
     extraResources: [{ from: cli, to: 'cli/codex-dog.exe' }, { from: join(resources, 'dog-distribution.json'), to: 'dog-distribution.json' }, { from: resolve('build/cli-file-guard.ps1'), to: 'cli-file-guard.ps1' }, { from: resolve('build/verify-signature.ps1'), to: 'verify-signature.ps1' }],
-    win: { target: ['nsis'], artifactName: policy.artifactName, signAndEditExecutable: true, ...(policy.signing.forceCodeSigning ? { icon: resolve('build/icon.ico') } : {}), ...policy.signing.win },
+    win: { target: ['nsis'], artifactName: policy.artifactName, signAndEditExecutable: true, icon: resolve('build/icon.ico'), ...policy.signing.win },
     nsis: { oneClick: true, perMachine: false, allowElevation: false, runAfterFinish: false, createDesktopShortcut: false, createStartMenuShortcut: true, deleteAppDataOnUninstall: false, include: resolve('build/installer.nsh'), differentialPackage: false, packElevateHelper: false },
     publish: [{ provider: 'github', owner: 'crankfreedom', repo: 'codex-dog', releaseType: 'draft', channel: policy.channel === 'stable' ? 'latest' : 'beta' }],
     afterPack: async context => { if (policy.signing.forceCodeSigning) await context.packager.sign(join(context.appOutDir, 'resources/cli/codex-dog.exe')); },

@@ -3,7 +3,7 @@ import { mkdirSync, lstatSync, openSync, writeFileSync, fsyncSync, closeSync, re
 import { join, isAbsolute } from 'node:path';
 
 export class LeaseError extends Error { code: string; constructor(code: string, message: string) { super(message); this.code = code; } }
-export interface TargetLease { target: string; token: string }
+export interface TargetLease { target: string; token: string;pid:number }
 export class TargetLeaseAdapter {
   private location?: { directory: string; verified: boolean };
   private started = false;
@@ -30,7 +30,7 @@ export class TargetLeaseAdapter {
     const path = this.path(target); let fd: number;
     try { fd = openSync(path, 'wx', 0o600); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new LeaseError('TARGET_BUSY', '目标已有锁，拒绝自动回收'); throw new LeaseError('TARGET_LOCK_UNVERIFIED', '无法取得目标锁'); }
-    const lease = { target, token: randomUUID() };
+    const lease = { target, token: randomUUID(),pid:process.pid };
     // 写入失败保留不确定文件，不能抢删或假定无锁。
     try { writeFileSync(fd, JSON.stringify({ pid: process.pid, token: lease.token })); fsyncSync(fd); }
     finally { closeSync(fd); }
@@ -42,6 +42,11 @@ export class TargetLeaseAdapter {
   }
   release(lease: TargetLease) {
     this.assertOwned(lease); unlinkSync(this.path(lease.target)); this.owned.delete(lease.token);
+  }
+  releaseRecorded(lease:TargetLease){
+    if(lease.pid===process.pid){const owned=this.owned.get(lease.token);if(!owned)throw new LeaseError('TARGET_LOCK_UNVERIFIED','当前进程没有该历史租约');this.release(owned);return;}
+    try{process.kill(lease.pid,0);throw new LeaseError('TARGET_BUSY','原持有者仍在运行，不释放历史锁');}catch(error){if((error as NodeJS.ErrnoException).code!=='ESRCH')throw error;}
+    const path=this.path(lease.target),record=this.read(path);if(record.pid!==lease.pid||record.token!==lease.token)throw new LeaseError('TARGET_LOCK_UNVERIFIED','历史锁身份已变化');unlinkSync(path);
   }
   close() {
     let failed = false;

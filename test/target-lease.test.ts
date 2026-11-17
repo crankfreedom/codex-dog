@@ -59,3 +59,7 @@ test('独立仓库也验证两个真实新版子进程竞争恰好一个获胜',
   try { const results = await Promise.all(contenders.map(c => c.acquire())); assert.equal(results.filter(r => r.acquired).length, 1); }
   finally { await Promise.all(contenders.map(c => c.release())); }
 });
+test('只在持久锁身份匹配且原持有者已退出时释放历史租约',async()=>{
+ const dir=directory(),target='recorded-own-lock',owner=await contender('new',dir,target);assert((await owner.acquire()).acquired);const record=JSON.parse(readFileSync(lockPath(dir,target),'utf8'));
+ const locks=new TargetLeaseAdapter({directory:dir,verified:true});locks.start();try{assert.throws(()=>locks.releaseRecorded({target,...record}),/仍在运行/);const ended=once(owner.child,'exit');owner.child.send('crash');await ended;assert.throws(()=>locks.releaseRecorded({target,pid:record.pid,token:'wrong'}),/身份已变化/);assert(existsSync(lockPath(dir,target)));locks.releaseRecorded({target,...record});assert(!existsSync(lockPath(dir,target)));}finally{locks.close();await owner.release();}
+});

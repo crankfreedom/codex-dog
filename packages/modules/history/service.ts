@@ -1,4 +1,4 @@
-import { eventQuery,eventExport } from '../../contracts/stage3.ts';
+import { eventQuery,eventExport,eventSubscribe } from '../../contracts/stage3.ts';
 import { Stage3Error } from '../persistence/stage3-ports.ts';
 import type { Stage3StorePort,ActorRef,ExportOperation,HistoryFilter } from '../persistence/stage3-ports.ts';
 export interface CursorPayload { version:1;boundary:number;after:number;filterHash:string }
@@ -10,13 +10,32 @@ export class HistoryService {
   constructor(store:Stage3StorePort,files:ExportFiles,options:HistoryService['options']){this.store=store;this.files=files;this.options=options;}
   async start(){await this.files.start();const interrupted=this.store.recoverExports(this.at());await this.files.recover(interrupted);this.stopped=false;}
   private at(){return new Date(this.options.now()).toISOString();}
-  private filter(value:HistoryFilter):HistoryFilter{return {...(value.from?{from:new Date(value.from).toISOString()}:{}),...(value.to?{to:new Date(value.to).toISOString()}:{}),...(value.type?{type:value.type}:{}),...(value.reason?{reason:value.reason}:{})};}
+  private filter(value:HistoryFilter):HistoryFilter{return {...(value.from?{from:new Date(value.from).toISOString()}:{}),...(value.to?{to:new Date(value.to).toISOString()}:{}),...(value.type?{type:value.type}:{}),...(value.reason?{reason:value.reason}:{}),...(value.taskId?{taskId:value.taskId}:{})};}
   query(raw:unknown){
     const parsed=eventQuery.safeParse(raw);if(!parsed.success)throw new Stage3Error('INVALID_ARGUMENT','历史查询参数无效');
     const input=parsed.data;const filter=this.filter(input);const filterHash=this.options.digest(JSON.stringify(filter));let boundary=this.store.eventBoundary(),after=0;
     if(input.cursor){const cursor=this.options.decode(input.cursor);if(cursor.filterHash!==filterHash)throw new Stage3Error('INVALID_ARGUMENT','游标不属于当前查询条件');boundary=cursor.boundary;after=cursor.after;}
     const rows=this.store.eventPage(filter,boundary,after,input.limit+1);const more=rows.length>input.limit;const items=rows.slice(0,input.limit);
     return {items,boundary,nextCursor:more?this.options.encode({version:1,boundary,after:items.at(-1)!.sequence,filterHash}):null,source:'local',observedAt:this.at(),stale:false};
+  }
+  async subscribe(raw:unknown,actor:ActorRef){
+    if(this.stopped)throw new Stage3Error('APP_STOPPING','历史服务正在退出');
+    const parsed=eventSubscribe.safeParse(raw);if(!parsed.success)throw new Stage3Error('INVALID_ARGUMENT','事件订阅参数无效');
+    await this.options.authorize(actor);
+    if(this.stopped)throw new Stage3Error('APP_STOPPING','历史服务正在退出');
+    const input=parsed.data,filter=this.filter(input),filterHash=this.options.digest(JSON.stringify(['events.subscribe',filter]));
+    const latest=this.store.eventBoundary();let boundary=latest,after=0;
+    if(input.cursor){
+      const cursor=this.options.decode(input.cursor);
+      if(cursor.filterHash!==filterHash||cursor.after>cursor.boundary||cursor.boundary>latest)throw new Stage3Error('INVALID_ARGUMENT','订阅游标不属于当前条件或历史已更换');
+      after=cursor.after;boundary=after===cursor.boundary?latest:cursor.boundary;
+    }
+    const rows=this.store.eventPage(filter,boundary,after,input.limit+1),more=rows.length>input.limit,items=rows.slice(0,input.limit);
+    // 每批固化边界；追平后跳至该边界，后续过滤不匹配的事实也不会被反复扫描。
+    const nextCursor=this.options.encode({version:1,boundary,after:more?items.at(-1)!.sequence:boundary,filterHash});
+    await this.options.authorize(actor);
+    if(this.stopped)throw new Stage3Error('APP_STOPPING','历史服务正在退出');
+    return {items,boundary,nextCursor,caughtUp:!more,source:'local' as const,observedAt:this.at(),stale:false as const};
   }
   view(operation:ExportOperation){const {actor,owner,targetName,...safe}=operation;return safe;}
   get(id:string,owner:string,allowAll=false){return this.view(this.store.getExport(id,owner,allowAll));}

@@ -31,7 +31,10 @@
     "check:release": "node scripts/check-release.mjs",
     "test:g06": "node scripts/g06-smoke.mjs",
     "test:stage2": "node scripts/stage2-smoke.mjs",
-    "test:stage3": "node scripts/stage3-smoke.mjs"
+    "test:stage3": "node scripts/stage3-smoke.mjs",
+    "test:stage4": "node scripts/stage4-smoke.mjs --ui --faults",
+    "build:icon": "node scripts/build-icon.mjs",
+    "test:upgrade": "node scripts/stage6-upgrade.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

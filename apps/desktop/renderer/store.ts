@@ -6,7 +6,7 @@ import { quotaPresentation } from './quota-view.ts';
 import { appearanceSchema,defaultAppearance } from '../../../packages/contracts/stage3.ts';
 import { appearanceStyle } from '../../../packages/contracts/appearance-style.ts';
 export interface ClientView { id: string; label: string; status: string; revision: number; scopes: string[]; requestedScopes: string[]; pairingExpiresAt: number; expiresAt: number | null }
-export interface Selection { source: 'fixture' | 'live-readonly'; callerThreadId: string; pipe: string }
+export interface Selection {cardExecutable?:string;allowCardConsumption?:boolean; source: 'fixture' | 'live-readonly'; callerThreadId: string; pipe: string }
 export interface Configuration { active: Selection; saved: Selection; revision: number; restartRequired: boolean; override: boolean }
 export const useDesktop = defineStore('desktop', () => {
   const page = ref('quota'); const health = ref<Record<string, unknown>>({}); const quota = ref<QuotaSnapshot | null>(null);

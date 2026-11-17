@@ -20,7 +20,7 @@ async function scan(directory) {
     else if (/\.(ts|vue)$/.test(file)) {
       const text = await readFile(file, 'utf8');
       assert(!/codex-resume|auth\.json/.test(text), `${file} 不得导入旧实现或读取认证文件`);
-      if (!file.endsWith('codex-desktop-readonly.ts') && file !== 'packages/contracts/protocol.ts') assert(!/codex-app-tools-/.test(text), `${file} 只有只读适配器可连接桌面管道，公共契约仅可声明选择白名单`);
+      if (!file.endsWith('codex-desktop-readonly.ts')&&!file.endsWith('codex-message-dispatch.ts') && file !== 'packages/contracts/protocol.ts') assert(!/codex-app-tools-/.test(text), `${file} 只有专用读取/投递适配器可连接桌面管道，公共契约仅可声明选择白名单`);
       if (!file.endsWith('codex-goal-readonly.ts')) assert(!/goals_1\.sqlite/.test(text), `${file} 只有 Goal 只读适配器可定位源库`);
       if (file.endsWith('codex-desktop-readonly.ts')) assert(!/send_message|consume|resetCredit|app-server/.test(text), '桌面只读适配不得包含发送/消费/独立 App Server');
       if (file.startsWith('packages/modules/') || file.startsWith('packages/update/')) assert(!/from ['"](?:node:|electron|.*infrastructure|.*apps\/)/.test(text), `${file} 模块不得依赖基础设施`);

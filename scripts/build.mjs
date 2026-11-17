@@ -17,4 +17,5 @@ await build({ entryPoints: ['apps/desktop/renderer/renderer.ts'], outfile: 'out/
   }); } }], metafile: true }).then(async result => writeFile('out/renderer.meta.json', JSON.stringify(result.metafile, null, 2)));
 for (const file of ['index.html', 'style.css']) await copyFile(resolve('apps/desktop/renderer', file), resolve('out/renderer', file));
 await copyFile('packages/infrastructure/windows-pipe.ps1', 'out/windows-pipe.ps1');
-console.log('阶段 3 构建完成：只读设置、诊断、历史及统一桌面。');
+await copyFile('build/icon.png','out/icon.png');await copyFile('build/icon.svg','out/renderer/icon.svg');
+console.log('Codex Dog 构建完成：统一桌面、任务、投递和卡片。');

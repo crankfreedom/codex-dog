@@ -1,29 +1,44 @@
+import {automationOutputs} from './automation-outputs.ts';
 import { z } from 'zod';
 import { stage3Definitions, stage3WorkerOperations,stage3Outputs } from './stage3.ts';
+import { automationDefinitions,automationOperations } from './automation.ts';
+import {deliveryDefinitions,deliveryOperations} from './delivery.ts';
+import {cardDefinitions,cardOperations} from './cards.ts';
+import {notificationDefinitions,notificationOperations} from './notifications.ts';
+import {updateConfigureParams,updateConfiguration} from './updates.ts';
 
 declare const __DOG_BUILD_VERSION__: string;
 export const version = typeof __DOG_BUILD_VERSION__ === 'string' ? __DOG_BUILD_VERSION__ : '0.6.0-g06';
 export const apiVersion = '3';
 export const emptyParams = z.object({}).strict();
-export const sourceSelection = z.object({ source: z.enum(['fixture', 'live-readonly']), callerThreadId: z.union([z.literal(''), z.string().uuid()]), pipe: z.string().max(160).refine(value => !value || /^\\\\\.\\pipe\\codex-app-tools-[a-zA-Z0-9-]{1,100}$/.test(value)) }).strict();
+export const sourceSelection = z.object({ cardExecutable:z.string().max(500).refine(value=>!value||/^[A-Za-z]:[\\\\/](?:[^<>:|?*\\r\\n]+[\\\\/])*codex\\.exe$/i.test(value)).optional(),allowCardConsumption:z.boolean().optional(),source: z.enum(['fixture', 'live-readonly']), callerThreadId: z.union([z.literal(''), z.string().uuid()]), pipe: z.string().max(160).refine(value => !value || /^\\\\\.\\pipe\\codex-app-tools-[a-zA-Z0-9-]{1,100}$/.test(value)) }).strict();
 export const sourceConfigureParams = sourceSelection.extend({ expectedRevision: z.number().int().positive() }).refine(value => value.source !== 'live-readonly' || !!value.callerThreadId, '真实模式必须明确调用会话');
 export const quitParams = z.object({ expectedInstanceId: z.string().uuid(), confirm: z.literal(true) }).strict();
 export const describeParams = z.object({ operation: z.string().min(1).max(100) }).strict();
-export const scopeSchema = z.enum(['read', 'access.manage', 'app.manage', 'settings.manage']);
+export const scopeSchema = z.enum(['read', 'access.manage', 'app.manage', 'settings.manage','content.read','tasks.manage','messages.send','cards.manage','cards.consume']);
 export type Scope = z.infer<typeof scopeSchema>;
 export const credentialSchema = z.object({ clientId: z.string().uuid(), secret: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 export type Credential = z.infer<typeof credentialSchema>;
-export const accessRequestParams = z.object({ clientLabel: z.string().trim().min(1).max(80), requestedScopes: z.array(scopeSchema).min(1).max(4) }).strict();
-export const accessGrantParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive(), code: z.string().regex(/^[A-F0-9]{6}$/), scopes: z.array(scopeSchema).min(1).max(4), expiresAt: z.string().datetime({ offset: true }).nullable().default(null) }).strict();
+export const accessRequestParams = z.object({ clientLabel: z.string().trim().min(1).max(80), requestedScopes: z.array(scopeSchema).min(1).max(9) }).strict();
+export const accessGrantParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive(), code: z.string().regex(/^[A-F0-9]{6}$/), scopes: z.array(scopeSchema).min(1).max(9), expiresAt: z.string().datetime({ offset: true }).nullable().default(null) }).strict();
 export const accessRevokeParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive() }).strict();
 export const threadRefParams = z.object({ connectionId: z.string().uuid(), threadId: z.string().uuid() }).strict();
 export const threadListParams = z.object({ connectionId: z.string().uuid(), limit: z.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(2000).optional(), archived: z.boolean().default(false) }).strict();
 export const updateDownloadParams = z.object({ candidateId: z.string().uuid(), expectedVersion: z.string().min(1).max(80) }).strict();
 export const updateInstallParams = z.object({ artifactId: z.string().uuid(), expectedVersion: z.string().min(1).max(80), confirm: z.literal(true) }).strict();
 export const liveOperations = new Set(['connections.discover', 'connections.get', 'quota.refresh', 'threads.list', 'threads.get', 'goals.get']);
-export const workerOperations = new Set(['quota.get', ...liveOperations, ...stage3WorkerOperations]);
+export const workerOperations = new Set(['quota.get', ...liveOperations, ...stage3WorkerOperations,...automationOperations,...deliveryOperations,...cardOperations,...notificationOperations]);
+const platformOutputs:Record<string,z.ZodType>={
+  'updates.configure':updateConfiguration.extend({channel:z.enum(['stable','beta'])}),
+  'desktop.openConsole':z.object({opened:z.literal(true)}).strict(),
+  'app.version':z.object({version:z.string(),apiVersion:z.literal('3'),schemaVersion:z.number().int().positive().nullable()}).strict(),
+};
 export const definitions = [
   ...stage3Definitions,
+  ...automationDefinitions,
+  ...deliveryDefinitions,
+  ...cardDefinitions,
+  ...notificationDefinitions,
   { operation: 'connections.configuration', command: ['connections', 'configuration'], tool: 'connections_configuration', description: '读取当前和下次启动的显式来源选择。', input: emptyParams, scope: 'read', readOnly: true },
   { operation: 'connections.configure', command: ['connections', 'configure'], tool: 'connections_configure', description: '保存下次启动的来源选择，当前进程不自动切换；需要应用管理权限。', input: sourceConfigureParams, scope: 'app.manage', readOnly: false },
   { operation: 'desktop.show', command: ['desktop', 'show'], tool: 'desktop_show', description: '显示本应用窗口，应用离线时不拉起。', input: emptyParams, scope: 'read', readOnly: true },
@@ -40,6 +55,8 @@ export const definitions = [
   { operation: 'threads.get', command: ['threads', 'get'], tool: 'threads_get', description: '读取会话和最新轮次状态，核对前后 Goal，不含正文。', input: threadRefParams, scope: 'read', readOnly: true },
   { operation: 'goals.get', command: ['goals', 'get'], tool: 'goals_get', description: '只读 Goal 身份及状态，明确未知和无当前 Goal。', input: threadRefParams, scope: 'read', readOnly: true },
   { operation: 'updates.status', command: ['updates', 'status'], tool: 'updates_status', description: '读取当前发行通道的固定 GitHub 更新状态与持久操作结果。', input: emptyParams, scope: 'read', readOnly: true },
+  { operation: 'updates.configure', command: ['updates', 'configure'], tool: 'updates_configure', description: '修订固定发行通道的自动只读检查策略；不自动下载或安装。', input: updateConfigureParams, scope: 'app.manage', readOnly: false },
+  { operation: 'desktop.openConsole', command: ['desktop','open-console'],tool:'desktop_open_console',description:'打开本应用诊断控制台，不执行任意命令。',input:emptyParams,scope:'app.manage',readOnly:false },
   { operation: 'updates.check', command: ['updates', 'check'], tool: 'updates_check', description: '检查固定更新仓库，不自动下载或安装。', input: emptyParams, scope: 'read', readOnly: true },
   { operation: 'updates.download', command: ['updates', 'download'], tool: 'updates_download', description: '下载固定候选，返回持久操作 ID。', input: updateDownloadParams, scope: 'app.manage', readOnly: false },
   { operation: 'updates.install', command: ['updates', 'install'], tool: 'updates_install', description: '明确确认安装，先检查 CLI 占用、备份并清理进程。', input: updateInstallParams, scope: 'app.manage', readOnly: false },
@@ -64,14 +81,23 @@ export function exitCode(result: Response): number {
   if (result.ok) return 0;
   if (['INVALID_ARGUMENT', 'INPUT_TOO_LARGE'].includes(result.error.code)) return 2;
   if (['PERMISSION_DENIED', 'AUTH_REQUIRED', 'AUTH_REVOKED'].includes(result.error.code)) return 3;
-  if (['APP_NOT_READY', 'APP_STOPPING', 'REVISION_CONFLICT', 'IDEMPOTENCY_CONFLICT', 'PAIRING_EXPIRED', 'CLIENT_LIMIT', 'CONNECTION_IDENTITY_CHANGED', 'TARGET_IDENTITY_MISMATCH', 'GOAL_IDENTITY_CHANGED', 'UPDATE_BUSY', 'UPDATE_VERSION_REJECTED', 'CLI_IN_USE', 'UPDATE_HISTORY_FULL'].includes(result.error.code)) return 4;
-  if (['APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'WINDOW_UNAVAILABLE','OPERATION_NOT_FOUND','EXPORT_TARGET_EXISTS','PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE', 'UPDATE_UNSUPPORTED', 'UPDATE_SOURCE_UNAVAILABLE', 'UPDATE_METADATA_INVALID', 'UPDATE_INTEGRITY_FAILED', 'UPDATE_SIGNATURE_INVALID', 'UPDATE_DOWNLOAD_FAILED', 'UPDATE_INSTALL_FAILED'].includes(result.error.code)) return 5;
+  if (['UNRESOLVED_ATTEMPT','UNRESOLVED_CONSUMPTION','QUEUE_FULL','TARGET_BUSY','TARGET_MANAGED','TASK_MUST_PAUSE','TASK_BLOCKED','TASK_COMPLETED','RESUME_LIMIT','CARD_UNAVAILABLE','APPOINTMENT_MISSED','OPERATION_IRREVERSIBLE','APP_NOT_READY', 'APP_STOPPING', 'REVISION_CONFLICT', 'IDEMPOTENCY_CONFLICT', 'PAIRING_EXPIRED', 'CLIENT_LIMIT', 'CONNECTION_IDENTITY_CHANGED', 'TARGET_IDENTITY_MISMATCH', 'GOAL_IDENTITY_CHANGED', 'UPDATE_BUSY', 'UPDATE_VERSION_REJECTED', 'CLI_IN_USE', 'UPDATE_HISTORY_FULL'].includes(result.error.code)) return 4;
+  if (['TARGET_BINDING_UNVERIFIED','TARGET_LOCK_UNVERIFIED','LIVE_EFFECTS_NOT_AUTHORIZED','RECEIPT_PROOF_UNAVAILABLE','RESOURCE_NOT_FOUND','APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'WINDOW_UNAVAILABLE','OPERATION_NOT_FOUND','EXPORT_TARGET_EXISTS','PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE', 'UPDATE_UNSUPPORTED', 'UPDATE_SOURCE_UNAVAILABLE', 'UPDATE_METADATA_INVALID', 'UPDATE_INTEGRITY_FAILED', 'UPDATE_SIGNATURE_INVALID', 'UPDATE_DOWNLOAD_FAILED', 'UPDATE_INSTALL_FAILED'].includes(result.error.code)) return 5;
   if (result.error.code === 'OPERATION_UNCERTAIN') return 6;
   return 7;
 }
 export function describe(operation: string) {
   const definition = definitions.find(item => item.operation === operation);
-  return definition ? { operation: definition.operation, command: definition.command, mcpTool: definition.tool, description: definition.description, inputSchema: {type:'object' as const,...z.toJSONSchema(definition.input)},...(stage3Outputs[operation]?{outputSchema:z.toJSONSchema(stage3Outputs[operation]!),apiVersion,timeoutMs:operation==='diagnostics.run'?45000:10000,idempotency:definition.readOnly?'read-only':['appearance.preview','appearance.cancelPreview'].includes(operation)?'window-scoped':operation==='desktop.openDataDirectory'?'fixed-platform-action':'durable',errors:['INVALID_ARGUMENT','PERMISSION_DENIED','AUTH_REVOKED','APP_NOT_RUNNING','APP_NOT_READY','APP_STOPPING','REVISION_CONFLICT','IDEMPOTENCY_CONFLICT','STORAGE_FAILURE','CLIENT_LIMIT','WINDOW_UNAVAILABLE','OPERATION_NOT_FOUND','EXPORT_TARGET_EXISTS']}:{}), scopes: definition.scope==='public'?[]:[definition.scope], readOnly: definition.readOnly, available: true } : undefined;
+  const conditionalScopes:Record<string,Array<{when:string;scopes:string[]}>>={
+    'tasks.create':[{when:'enabled=true and mode=auto',scopes:['messages.send']}],
+    'tasks.enable':[{when:'mode=auto',scopes:['messages.send']}],
+    'tasks.get':[{when:'includeContent=true',scopes:['content.read']}],
+    'archives.get':[{when:'includeContent=true',scopes:['content.read']}],
+    'templates.get':[{when:'includeContent=true',scopes:['content.read']}],
+    'templates.create':[{when:'copyOfId supplied',scopes:['content.read']}],
+  };
+  const additionalScopes:Record<string,string[]>={'resetAppointments.create':['cards.consume'],'resetAppointments.reconcile':['cards.consume'],'scheduler.runNow':['messages.send']};
+  return definition ? { operation: definition.operation, command: definition.command, mcpTool: definition.tool, description: definition.description, inputSchema: {type:'object' as const,...z.toJSONSchema(definition.input)},...((stage3Outputs[operation]??automationOutputs[operation]??platformOutputs[operation])?{outputSchema:z.toJSONSchema((stage3Outputs[operation]??automationOutputs[operation]??platformOutputs[operation])!),apiVersion,timeoutMs:operation==='diagnostics.run'?45000:10000,idempotency:definition.readOnly?'read-only':['appearance.preview','appearance.cancelPreview'].includes(operation)?'window-scoped':operation==='desktop.openDataDirectory'?'fixed-platform-action':'durable',errors:['INVALID_ARGUMENT','PERMISSION_DENIED','AUTH_REVOKED','APP_NOT_RUNNING','APP_NOT_READY','APP_STOPPING','REVISION_CONFLICT','IDEMPOTENCY_CONFLICT','STORAGE_FAILURE','CLIENT_LIMIT','WINDOW_UNAVAILABLE','OPERATION_NOT_FOUND','EXPORT_TARGET_EXISTS']}:{}), scopes: definition.scope==='public'?[]:[definition.scope,...(additionalScopes[operation]??[])],conditionalScopes:conditionalScopes[operation]??[],readOnly: definition.readOnly, available: true } : undefined;
 }
 export function mcpInputSchema(operation:string){
   const definition=definitions.find(x=>x.operation===operation);if(!definition)return undefined;

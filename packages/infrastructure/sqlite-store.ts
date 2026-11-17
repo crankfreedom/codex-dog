@@ -8,10 +8,13 @@ import type { UsageObservation } from '../modules/quota/service.ts';
 import { defaultAppearance, defaultMonitoring } from '../contracts/stage3.ts';
 import { Stage3Error } from '../modules/persistence/stage3-ports.ts';
 import type { Stage3StorePort,SettingView,HistoryFilter,HistoryEvent,ExportOperation } from '../modules/persistence/stage3-ports.ts';
+import type { AutomationStorePort,AutomationState } from '../modules/automation/ports.ts';
+import { AutomationError } from '../modules/automation/ports.ts';
+import {automationStateSchema} from '../contracts/automation-storage.ts';
 
 const applicationId = 0x43444733;
-export const currentSchema = 3;
-export class SqliteStore implements ObservationStorePort,Stage3StorePort {
+export const currentSchema = 11;
+export class SqliteStore implements ObservationStorePort,Stage3StorePort,AutomationStorePort {
   private path: string;
   private db?: DatabaseSync;
   private fault?: (stage: string) => void;
@@ -59,14 +62,53 @@ export class SqliteStore implements ObservationStorePort,Stage3StorePort {
           db.prepare('INSERT INTO app_history_meta VALUES(?,?)').run('cursor',randomUUID()+randomUUID());
           this.fault?.('migration:3');
         }
+        if(version<4){
+          db.exec('CREATE TABLE automation_state(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL CHECK(revision>0),payload TEXT NOT NULL) STRICT; PRAGMA user_version=4;');
+          const initial={version:1,templates:[{id:randomUUID(),name:'继续已确认任务',body:'请继续此前已确认的任务，先核对当前状态，再推进尚未完成的工作。',revision:1,isDefault:true,deleted:false}],tasks:[],events:[],operations:[]};
+          db.prepare('INSERT INTO automation_state VALUES(1,1,?)').run(JSON.stringify(initial));this.fault?.('migration:4');
+        }
+        if(version<5){
+          const row=db.prepare('SELECT payload FROM automation_state WHERE id=1').get()!;const data=JSON.parse(String(row.payload));
+          Object.assign(data,{attempts:[],queue:{revision:1,enabled:false,limit:1},scheduler:{revision:1,enabled:false,pollSeconds:15}});
+          db.prepare('UPDATE automation_state SET payload=? WHERE id=1').run(JSON.stringify(data));db.exec('CREATE TABLE fixture_delivery_receipts(marker TEXT PRIMARY KEY,turnId TEXT NOT NULL) STRICT; PRAGMA user_version=5');this.fault?.('migration:5');
+        }
+        if(version<6){
+          const row=db.prepare('SELECT payload FROM automation_state WHERE id=1').get()!,data=JSON.parse(String(row.payload));data.appointments=[];
+          db.prepare('UPDATE automation_state SET payload=? WHERE id=1').run(JSON.stringify(data));db.exec('CREATE TABLE fixture_card_receipts(consumeKey TEXT PRIMARY KEY,creditId TEXT NOT NULL,outcome TEXT NOT NULL) STRICT; PRAGMA user_version=6;');this.fault?.('migration:6');
+        }
+        if(version<7){db.exec('ALTER TABLE app_events ADD COLUMN resourceId TEXT; CREATE INDEX app_events_resource ON app_events(resourceId,sequence); PRAGMA user_version=7;');this.fault?.('migration:7');}
+        if(version<8){const row=db.prepare('SELECT payload FROM automation_state WHERE id=1').get()!,data=JSON.parse(String(row.payload));data.notifications={revision:1,enabled:false,dailyWindow:{allDay:true},cursor:0};db.prepare('UPDATE automation_state SET payload=? WHERE id=1').run(JSON.stringify(data));db.exec('PRAGMA user_version=8');this.fault?.('migration:8');}
+        if(version<9){const row=db.prepare('SELECT payload FROM automation_state WHERE id=1').get()!,data=JSON.parse(String(row.payload));for(const attempt of data.attempts)attempt.lease=null;db.prepare('UPDATE automation_state SET payload=? WHERE id=1').run(JSON.stringify(data));db.exec('PRAGMA user_version=9');this.fault?.('migration:9');}
+        if(version<10){const row=db.prepare('SELECT payload FROM automation_state WHERE id=1').get()!,data=JSON.parse(String(row.payload));data.backgroundOperations=[];db.prepare('UPDATE automation_state SET payload=? WHERE id=1').run(JSON.stringify(data));db.exec('PRAGMA user_version=10');this.fault?.('migration:10');}
+        if(version<11){const row=db.prepare('SELECT payload FROM automation_state WHERE id=1').get()!,data=JSON.parse(String(row.payload));for(const attempt of data.attempts)attempt.source=db.prepare('SELECT 1 FROM fixture_delivery_receipts WHERE marker=?').get(attempt.marker)?'fixture':'unknown';for(const item of data.appointments)item.source=db.prepare('SELECT 1 FROM fixture_card_receipts WHERE consumeKey=? AND creditId=?').get(item.consumeKey,item.creditId)?'fixture':'unknown';for(const task of data.tasks)task.source=data.attempts.some((x:{taskId:string;source:string})=>x.taskId===task.id&&x.source==='fixture')?'fixture':'unknown';for(const operation of data.operations){const name=JSON.parse(operation.scope)[1];const item=String(name).startsWith('tasks.')?data.tasks.find((x:{id:string})=>x.id===operation.result.id):String(name).startsWith('resetAppointments.')?data.appointments.find((x:{id:string})=>x.id===operation.result.id):undefined;if(item)operation.result.source=item.source;}db.prepare('UPDATE automation_state SET payload=? WHERE id=1').run(JSON.stringify(data));db.exec('PRAGMA user_version=11');this.fault?.('migration:11');}
       });
       if (db.prepare('PRAGMA journal_mode=WAL').get()!.journal_mode !== 'wal') throw new PersistenceError('STORAGE_FAILURE', 'WAL 模式未生效');
       db.exec('PRAGMA synchronous=FULL; PRAGMA wal_autocheckpoint=1000;');
       // 固定查询检查已知版本结构，不以 user_version 单独信任 schema。
-      this.snapshot(); db.prepare('SELECT scenario,payload FROM observations LIMIT 0').all();this.readSetting('appearance');this.readSetting('monitoring');this.cursorKey();
+      this.snapshot(); db.prepare('SELECT scenario,payload FROM observations LIMIT 0').all();this.readSetting('appearance');this.readSetting('monitoring');this.cursorKey();this.readAutomation();
     } catch (error) { db.close(); this.db = undefined; throw error; }
   }
   private connection() { if (!this.db) throw new PersistenceError('APP_NOT_READY', '存储尚未启动'); return this.db; }
+  saveFixtureReceipt(marker:string,turnId:string){this.connection().prepare('INSERT INTO fixture_delivery_receipts VALUES(?,?)').run(marker,turnId);}
+  readFixtureReceipt(marker:string){const row=this.connection().prepare('SELECT turnId FROM fixture_delivery_receipts WHERE marker=?').get(marker);return row?String(row.turnId):null;}
+  fixtureLatestDelivery(threadId:string){for(const attempt of this.readAutomation().attempts.toReversed()){if(attempt.threadRef.threadId!==threadId)continue;const turnId=this.readFixtureReceipt(attempt.marker);if(turnId)return {turnId};}return null;}
+  fixtureCardConsumed(creditId:string){return !!this.connection().prepare('SELECT 1 FROM fixture_card_receipts WHERE creditId=?').get(creditId);}
+  consumeFixtureCard(consumeKey:string,creditId:string):string{return this.transaction(()=>{const db=this.connection(),old=db.prepare('SELECT creditId,outcome FROM fixture_card_receipts WHERE consumeKey=?').get(consumeKey);if(old){if(old.creditId!==creditId)throw new AutomationError('IDEMPOTENCY_CONFLICT','模拟消费键已绑定其他卡');return String(old.outcome);}const outcome=this.fixtureCardConsumed(creditId)?'alreadyRedeemed':'reset';db.prepare('INSERT INTO fixture_card_receipts VALUES(?,?,?)').run(consumeKey,creditId,outcome);return outcome;});}
+  readAutomation():AutomationState {
+    const row=this.connection().prepare('SELECT revision,payload FROM automation_state WHERE id=1').get();
+    try{if(!row)throw new Error();const state=automationStateSchema.parse(JSON.parse(String(row.payload)));
+      if(state.version!==row.revision)throw new Error();return state;
+    }catch{throw new AutomationError('STORAGE_FAILURE','业务状态损坏，拒绝回填默认数据');}
+  }
+  commitAutomation(expectedVersion:number,state:AutomationState,event?:Parameters<AutomationStorePort['commitAutomation']>[2]):void{
+    this.transaction(()=>{
+      const current=this.readAutomation();if(current.version!==expectedVersion)throw new AutomationError('REVISION_CONFLICT','业务真值已变化');
+      if(event){state.events.push({...event,sequence:(current.events.at(-1)?.sequence??0)+1});this.connection().prepare('INSERT INTO app_events(at,type,reason,revision,resourceId) VALUES(?,?,?,?,?)').run(event.at,event.type,event.reason,event.revision,event.resourceId);}
+      state.version=expectedVersion+1;this.fault?.('automation:before-save');
+      if(!automationStateSchema.safeParse(state).success)throw new AutomationError('STORAGE_FAILURE','业务提交违反一致性或记录上限，原真值保留');
+      this.connection().prepare('UPDATE automation_state SET revision=?,payload=? WHERE id=1').run(state.version,JSON.stringify(state));this.fault?.('automation:commit');
+    });
+  }
   private transaction<T>(work: () => T): T {
     const db = this.connection(); db.exec('BEGIN IMMEDIATE');
     try { const value = work(); db.exec('COMMIT'); return value; }
@@ -177,9 +219,9 @@ export class SqliteStore implements ObservationStorePort,Stage3StorePort {
   appendRuntime(type:'runtime.started'|'runtime.stopping',mode:'fixture'|'live-readonly',at:string){this.connection().prepare('INSERT INTO app_events(at,type,reason) VALUES(?,?,?)').run(at,type,mode);}
   eventBoundary(){return Number(this.connection().prepare('SELECT coalesce(max(sequence),0) n FROM app_events').get()!.n);}
   eventPage(filter:HistoryFilter,boundary:number,after:number,limit:number):HistoryEvent[]{
-    const rows=this.connection().prepare(`SELECT sequence,at,type,reason,revision FROM app_events WHERE sequence>? AND sequence<=?
-      AND (? IS NULL OR at>=?) AND (? IS NULL OR at<=?) AND (? IS NULL OR type=?) AND (? IS NULL OR reason=?) ORDER BY sequence LIMIT ?`).all(after,boundary,filter.from??null,filter.from??null,filter.to??null,filter.to??null,filter.type??null,filter.type??null,filter.reason??null,filter.reason??null,limit);
-    return rows.map(row=>({sequence:Number(row.sequence),at:String(row.at),type:String(row.type),reason:String(row.reason),revision:row.revision===null?null:Number(row.revision),source:'local'}));
+    const rows=this.connection().prepare(`SELECT sequence,at,type,reason,revision,resourceId FROM app_events WHERE sequence>? AND sequence<=?
+      AND (? IS NULL OR at>=?) AND (? IS NULL OR at<=?) AND (? IS NULL OR type=?) AND (? IS NULL OR reason=?) AND (? IS NULL OR resourceId=?) ORDER BY sequence LIMIT ?`).all(after,boundary,filter.from??null,filter.from??null,filter.to??null,filter.to??null,filter.type??null,filter.type??null,filter.reason??null,filter.reason??null,filter.taskId??null,filter.taskId??null,limit);
+    return rows.map(row=>({sequence:Number(row.sequence),at:String(row.at),type:String(row.type),reason:String(row.reason),revision:row.revision===null?null:Number(row.revision),source:'local',...(row.resourceId?{resourceId:String(row.resourceId)}:{})}));
   }
   cursorKey(){const row=this.connection().prepare("SELECT value FROM app_history_meta WHERE key='cursor'").get();if(!row)throw new Stage3Error('STORAGE_FAILURE','历史游标密钥缺失');return String(row.value);}
   createExport(input:Parameters<Stage3StorePort['createExport']>[0]):ExportOperation{

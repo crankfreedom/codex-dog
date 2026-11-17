@@ -18,6 +18,12 @@ test('更新构造无 IO，未安装状态不隐式联网；状态不暴露路�
   const f = setup(); assert.equal(f.get().reads, 0); await f.service.start(); const reads = f.get().reads; f.service.status(); assert.equal(f.get().reads, reads);
   await download(f); const result = f.service.status(); assert(!JSON.stringify(result).includes('/private/')); assert(!JSON.stringify(result).includes('digest')); result.candidate!.version = 'changed'; assert.equal(f.service.status().candidate!.version, '0.5.0-beta.2'); await f.service.close();
 });
+test('更新配置保持固定通道、独立修订与持久幂等，旧授权复核，关闭取消计时器',async()=>{
+ const f=setup();await f.service.start();const input={expectedRevision:1,channel:'beta' as const,automaticCheck:true,intervalSeconds:3600,automaticDownload:false as const};const saved=await f.service.configure('client',input,'policy',f.guard);assert.equal(saved.revision,2);assert.equal(f.get().installs,0);assert.deepEqual(await f.service.configure('client',input,'policy',f.guard),saved);await assert.rejects(f.service.configure('client',{...input,channel:'stable'},'switch',f.guard),{code:'UPDATE_VERSION_REJECTED'});await assert.rejects(f.service.configure('client',{...input,intervalSeconds:7200},'policy',f.guard),{code:'IDEMPOTENCY_CONFLICT'});f.revoke();await assert.rejects(f.service.configure('client',{...input,expectedRevision:2},'revoked',f.guard),{code:'AUTH_REVOKED'});await f.service.close();
+});
+test('统一操作查询保持更新所有权，接受阶段可取消且不会派发下载',async()=>{
+ const f=setup();await f.service.start();await f.service.check();const c=f.service.status().candidate!;const op=await f.service.request('download','client',{candidateId:c.id,expectedVersion:c.version},'download',f.guard);assert.equal(f.service.operation(op.operationId,'other'),null);assert.equal(f.service.operation(op.operationId,'client')!.kind,'updates.download');const cancelled=await f.service.cancelOperation(op.operationId,'client',false,'cancel',f.guard);assert.equal(cancelled.state,'cancelled');await settled(f.service);assert.equal(f.service.status().artifact,null);await f.service.close();
+});
 test('同版/降级/stable 候选拒绝，不自动下载或安装', async () => {
   for (const version of ['0.5.0-beta.1', '0.4.0-beta.2', '0.6.0']) { const f = setup(); await f.service.start(); f.setCandidate({ version, fileName: 'x.exe', sha512: 'h', size: 1 }); await assert.rejects(f.service.check()); assert.equal(f.get().installs, 0); }
 });

@@ -1,7 +1,7 @@
 export interface ActorRef { kind:'desktop'|'external'; clientId:string; revision:number;canManageOperations?:boolean }
 export interface SettingView { section:'appearance'|'monitoring'; revision:number; values:Record<string,unknown> }
-export interface HistoryFilter { from?:string;to?:string;type?:string;reason?:string }
-export interface HistoryEvent { sequence:number;at:string;type:string;reason:string;source:'local';revision:number|null }
+export interface HistoryFilter { from?:string;to?:string;type?:string;reason?:string;taskId?:string }
+export interface HistoryEvent { sequence:number;at:string;type:string;reason:string;source:'local';revision:number|null;resourceId?:string|null }
 export interface ExportOperation { id:string;kind:'events.export';owner:string;state:'accepted'|'running'|'succeeded'|'failed'|'cancelled';createdAt:string;updatedAt:string;boundary:number;written:number;fileName:string|null;error:string|null;actor:ActorRef;cancelRequested:boolean;targetName:string }
 export interface Stage3StorePort {
   readSetting(section:SettingView['section']):SettingView;

@@ -5,8 +5,8 @@ Codex 任务托管与自动化管理工具，中文昵称「守码犬」。Dog �
 ## 当前可用范围
 
 G01–G04 已完成：Electron 主应用、独立业务进程、统一业务入口、独立 CLI EXE、IPC/MCP、本机配对授权与进程恢复。
-当前共 42 项能力：在既有额度/连接/配对/更新/托盘基础上，增加设置与外观、只读诊断、本应用历史查询/导出、操作核对及离线说明。默认 read；settings.manage 单独批准，仅修改本应用设置，不授予来源配置/退出/更新的 app.manage。
-阶段 3 提供完整只读桌面页面。全新 profile 默认 fixture；真实 live-readonly 须显式选择，来源保存下次启动生效。SQLite Schema 3 保存本应用设置、脱敏历史/导出操作及原模拟数据，真实额度/会话/Goal 观察仍只留内存。
+当前共 83 项能力、API 3 / SQLite Schema 11：增加任务/模板、队列/时段、统一投递及核对、指定卡预约、归档/时间线、通知、事件订阅和更新页面。默认 read；新增正文、任务、发送和卡权限分别申请，不自动扩权。阶段 4–6 的本轮总验收仍在推进。
+全新 profile 默认 fixture；真实 live-readonly 须显式选择，来源保存下次启动生效。真实账号/Goal 绑定、无正文唯一回执与旧锁目录门禁未齐全，真实发送阻断；卡来源须显式指定本机 codex.exe，真实消费另需开启来源并逐笔授权。真实额度/会话/Goal 观察仍只留内存。
 G03 仅隔离锁验证，G04 仅真实只读观察；未发送消息或消费重置卡。G05 两版 NSIS 与真实 GitHub 更新已通过。G06 已新增发行配置、签名入口、只构建 Actions 和 Preview；远端 CI/Preview 的构建及实装已跑通，真实签名与正式发行未放行。
 
 ## 开发环境启动
@@ -73,10 +73,13 @@ pnpm --dir codex-dog test:stage2
 pnpm --dir codex-dog test:stage2 --live
 pnpm --dir codex-dog test:stage3
 pnpm --dir codex-dog test:stage3 --live
+pnpm --dir codex-dog test:stage4
 ~~~
 
 ## 文档导航
 
+- [阶段 4 任务自动化](docs/stage4.md) 与 [阶段 5 指定卡](docs/stage5.md)：当前实现、模拟证据与真实门禁。
+- [阶段 6 发行验收](docs/stage6.md)、[逐项覆盖](docs/coverage.md)、[备份恢复](docs/recovery.md)：安装/升级、证据状态及故障处置。
 - [阶段 3 设置与诊断](docs/stage3.md)：本轮范围、使用、权限、历史导出及验证证据。
 - [阶段 2 只读桌面](docs/stage2.md)：使用、来源配置、托盘、安装版与模拟/真实/runner 证据分界。
 - [计划总览](PROJECT_PLAN.md)：范围、决策、状态与文档入口，不再承载全部技术细节。

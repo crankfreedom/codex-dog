@@ -1,4 +1,5 @@
 import type { Credential, Scope } from '../../contracts/protocol.ts';
+import { scopeSchema } from '../../contracts/protocol.ts';
 
 export class AccessError extends Error { code: string; constructor(code: string, message: string) { super(message); this.code = code; } }
 export interface ClientRecord {
@@ -30,7 +31,7 @@ export class AccessService {
     }
     if (scope && !actor.scopes.includes(scope as Scope)) throw new AccessError('PERMISSION_DENIED', '当前客户端无此权限');
   }
-  assertRevision(actor:{kind:'desktop'|'external';clientId:string;revision:number},scope:'read'|'settings.manage'){
+  assertRevision(actor:{kind:'desktop'|'external';clientId:string;revision:number},scope:Scope){
     if(actor.kind==='desktop'){if(actor.clientId!=='desktop'||actor.revision!==1)throw new AccessError('PERMISSION_DENIED','桌面身份无效');return;}
     const record=this.state.clients.find(x=>x.id===actor.clientId);
     if(!record)throw new AccessError('AUTH_REVOKED','授权已失效');
@@ -70,7 +71,7 @@ export class AccessService {
         if (old.status === 'revoked') throw new AccessError('AUTH_REVOKED', '请使用新客户端名称重新申请');
         return this.view(old);
       }
-      if (new Set(input.requestedScopes).size !== input.requestedScopes.length || input.requestedScopes.some(scope => !['read', 'access.manage', 'app.manage', 'settings.manage'].includes(scope))) throw new AccessError('INVALID_ARGUMENT', '权限申请无效');
+      if (new Set(input.requestedScopes).size !== input.requestedScopes.length || input.requestedScopes.some(scope => !scopeSchema.safeParse(scope).success)) throw new AccessError('INVALID_ARGUMENT', '权限申请无效');
       if (next.clients.length >= 1000 || next.clients.filter(item => item.status === 'pending' && item.pairingExpiresAt > this.ports.now()).length >= 32) throw new AccessError('CLIENT_LIMIT', '待配对客户端达到上限');
       const client: ClientRecord = { id: credential.clientId, label: input.clientLabel, secretHash, requestedScopes: [...input.requestedScopes], scopes: [], status: 'pending', revision: 1, createdAt: this.ports.now(), pairingExpiresAt: this.ports.now() + 300000, expiresAt: null, code: this.ports.newCode() };
       next.clients.push(client); return this.view(client);

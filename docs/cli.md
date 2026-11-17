@@ -2,7 +2,19 @@
 
 > 原计划 0.4 的设计基线按职责迁入本文件；具体实现状态以 [G04 实施记录](g04.md) 为准。设计目录不等于已实现能力。
 
-## 当前入口参数
+## 阶段 4–6 当前接入
+
+- 当前 83 项注册能力、API 3 / Schema 11；C01–C82 都有对应操作，另保留 connections.configuration。能力存在、当前来源可用与真实验收通过是不同事实。
+- 任务/模板默认脱敏；includeContent 和复制正文须 content.read。tasks.manage、messages.send、cards.manage、cards.consume 独立申请、桌面明确勾选，已有授权不自动扩权。
+- tasks create 默认暂停/仅观察；tasks enable 自动模式还需 confirmedRevision 与明确目标/Goal/轮次授权。重启后可提供当前 connectionId 显式重绑同一目标，不重置累计次数；未决期间拒绝重绑绕行。
+- templates/tasks/attempts/archives/timelines 支持 --id 快捷只读参数；修订类变更仍用 --input 补齐全部严格 Schema 和幂等键。
+- scheduler run-now 可能推进已授权任务；quota refresh、tasks inspect、diagnostics run 和 reset-cards refresh 均不推进调度。返回的调度/更新/导出操作可通过 operations get/list 核对。
+- reset-appointments create 明确 cardKey/scheduledAt/timeZone/confirm；核对需要 confirmMayComplete=true，始终原卡原键。实际 App Server 只在明确配置 cardExecutable 后启动，消费来源开关与逐笔授权独立。
+- events subscribe 为有界批次；events subscribe --follow --json 输出 NDJSON，慢 stdout 五秒断开。保存 nextCursor 可恢复，不拉起离线主应用。
+- updates configure 只配置当前发行身份的固定通道和自动只读检查；不自动下载或安装。desktop open-console 仅打开本应用诊断窗口。
+- 真实发送仍因账号/Goal、无正文回执及真实旧锁门禁阻断；模拟通过不代表真实副作用或正式发行通过。详见 stage4/stage5 记录。
+
+## 当前入口参数（阶段 3 历史签名）
 
 - 阶段 3 当前 42 项，API 3 / Schema 3：新增 settings.get/update、quota.policy.get/update、appearance.get/update/presets/preview/cancelPreview、diagnostics.run、events.query/export、operations.get/list/cancel、desktop.status/openDataDirectory、help.get/search；实现签名以能力目录为准，下方 82 项仍为最终设计。
 - settings.get 支持 --section；help.get/search 支持 --topic/--query；operations.get/cancel 支持 --id。也可 --input FILE|-；命名选项与输入文件不能混用。完整示例及范围见 [阶段 3](stage3.md)。

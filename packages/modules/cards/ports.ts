@@ -1,0 +1,6 @@
+import type {ActorRef} from '../persistence/stage3-ports.ts';
+export interface RawCard {id:string;title:string;status:'available'|'redeemed'|'redeeming'|'unknown';expiresAt:string|null}
+export interface CardObservation {accountBinding:string;cards:RawCard[];observedAt:string;source:'fixture'|'live';verified:boolean}
+export interface Appointment {id:string;source:'fixture'|'live'|'unknown';cardKey:string;creditId:string;accountBinding:string;consumeKey:string;scheduledAt:string;timeZone:string;owner:ActorRef;state:'pending'|'running'|'uncertain'|'succeeded'|'failed'|'cancelled'|'missed';revision:number;outcome:string|null;reason:string;createdAt:string;updatedAt:string;calls:number}
+export interface CardProviderPort {read():Promise<CardObservation>;consume(appointment:Appointment,finalGuard:()=>Promise<void>):Promise<{outcome:'reset'|'nothingToReset'|'noCredit'|'alreadyRedeemed'|'not_written'|'uncertain'}>;reconcile(appointment:Appointment,finalGuard:()=>Promise<void>):Promise<{outcome:'reset'|'nothingToReset'|'noCredit'|'alreadyRedeemed'|'not_written'|'uncertain'}>;close():Promise<void>}
+export function appointmentView(item:Appointment):Record<string,unknown>{const {creditId,accountBinding,consumeKey,owner,...view}=item;return view;}

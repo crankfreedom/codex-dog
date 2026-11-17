@@ -33,6 +33,7 @@ test('新额度桶缺失和缺窗口保持 unknown，不回退旧单桶，不依
   for (const raw of [{ ...quota(), rateLimitsByLimitId: {} }, { ...quota(), rateLimitsByLimitId: { codex: { primary: { usedPercent: 10 } } } }]) { const f = setup(); f.setQuota(raw); await f.service.start(); assert.equal(f.service.getQuota().available, null); }
   const f = setup(); f.setQuota({ ...quota(), rateLimitsByLimitId: { codex: { primary: { usedPercent: 100, resetsAt: 1 }, secondary: { usedPercent: 0 } } } }); await f.service.start(); assert.equal(f.service.getQuota().available, false);
 });
+test('ordinaryUsageAllowed 为 null 或缺失时，低百分比不能作为额度恢复证据',async()=>{for(const flag of [null,undefined]){const f=setup();f.setQuota({...quota(),ordinaryUsageAllowed:flag});await f.service.start();assert.equal(f.service.getQuota().available,null);}});
 test('非法额度、账号缺失及刷新失败不能保留虚假新快照', async () => {
   const f = setup(); await f.service.start(); f.setQuota({ ...quota(), rateLimitsByLimitId: { codex: { primary: { usedPercent: -1 } } } }); await assert.rejects(f.service.refresh(), code('PROVIDER_SCHEMA_UNSUPPORTED')); assert.throws(() => f.service.getQuota(), code('PROVIDER_SCHEMA_UNSUPPORTED'));
   const missing = setup(); missing.setQuota({ rateLimits: {} }); await missing.service.start(); assert.equal(missing.service.status().identityVerified, false); assert.throws(() => missing.service.getQuota(), code('PROVIDER_IDENTITY_UNAVAILABLE'));

@@ -30,6 +30,7 @@ export class Stage3Registry {
         }
         case 'diagnostics.run':data=await this.diagnostics.run(params.threadRef as Record<string,unknown>|undefined);break;
         case 'events.query':data=this.history.query(params);break;
+        case 'events.subscribe':data=await this.history.subscribe(params,actor);break;
         case 'events.export':data=await this.history.export(params,actor,request.idempotencyKey);break;
         case 'operations.get':data=this.history.get(String(params.id),actor.clientId,actor.kind==='desktop'||actor.canManageOperations===true);break;
         case 'operations.list':data=this.history.list(actor.clientId,Number(params.limit),actor.kind==='desktop'||actor.canManageOperations===true);break;

@@ -1,5 +1,22 @@
 # 公共契约、授权与事务
 
+## 阶段 4 实施增量（REQ-20261117-05，进行中）
+
+- 新增 content.read/tasks.manage/messages.send/cards.manage/cards.consume 独立申请项；旧授权保持原范围，不能因升级自动扩权。
+- 模板和任务管理先落地，能力目录只注册已经具备处理器的操作；投递、调度和卡片接入随后贯通，不以空接口占位。
+- Schema 11 在同一 worker/SQLite 内增加具备全局修订 CAS 的业务真值；增量迁移覆盖任务/投递/卡片/通知/锁证据及后台操作，幂等结果与脱敏事件同事务提交。JSON 快照只在本机库保存必要提示词，不在日志/普通结果中返回正文。
+- tasks.create 默认暂停、mode=observe；templateRef 复制指定修订正文。模板默认变化不回写任务。任务更新必须先暂停，保存后仍暂停，累计次数保留。
+- templates.get/tasks.get/archives.get 的 includeContent 额外复核 content.read；列表和修订元数据始终脱敏。复制已有模板正文也需要 content.read。
+- 自动模式 enable 必须明确 allowAutomaticSend、connectionRevision、expectedLatestTurnId、expectedGoalId，并复核 messages.send；真实绑定未验证时返回 TARGET_BINDING_UNVERIFIED，模拟不作为真实门禁证据。
+- 新增操作均使用能力目录声明的严格 Schema、持久幂等键及修订冲突；业务记录满后拒绝新增，不删除未决真值。
+- 当前实现与全部验收仍在推进；尚未执行真实发送/卡消费或公开发行。
+- 独立卡片来源由 connections.configure 的可选 cardExecutable 显式保存；只接受本机 codex.exe 绝对路径，留空不启动。allowCardConsumption 默认不启用，保存下次启动生效；它不授予 cards.consume，也不替代逐笔指定卡预约确认。
+- 投递端口成功最多 submitted、turnId=null；实际 Codex 当前缺少无正文唯一回执，真实业务门禁仍阻断。独立模拟来源有完整可核对回执/轮次/Goal 场景，不能当成真实证据。
+- 新增能力均声明输出 Schema、超时、幂等、条件权限；tasks.inspect 只读当前快照和指定目标，不刷新额度或推进任务。新分页游标绑定操作/过滤和固定边界。
+- events.subscribe 返回最多 200 条和始终可恢复的 nextCursor；CLI --follow 等待每批 stdout 后再读取，五秒慢输出断开，不创建无限宿主队列。
+- updates.configure 保存固定发行通道的自动只读检查策略（默认关闭）；自动下载固定 false，安装仍显式确认。发行身份的 stable/beta 不通过配置偷偷互换。
+- operations.get/list 汇总授权范围内的导出、调度和更新；取消仅对尚未开始的本地动作，已开始调度/安装等返回 OPERATION_IRREVERSIBLE，不撤回已发生副作用。
+
 > 原计划 0.4 的设计基线按职责迁入本文件；具体实现状态以 [G04 实施记录](g04.md) 为准。设计目录不等于已实现能力。
 
 ## 本机调用与公共契约

@@ -2,7 +2,7 @@
 import { reactive, ref, onMounted } from 'vue';
 import { ElButton } from 'element-plus';
 import { useDesktop } from './store.ts';
-const store = useDesktop(); const form = reactive({ source: 'fixture', callerThreadId: '', pipe: '' }); const message = ref(''); const busy = ref(false);
+const store = useDesktop(); const form = reactive({ source: 'fixture', callerThreadId: '', pipe: '',cardExecutable:'',allowCardConsumption:false }); const message = ref(''); const busy = ref(false);
 onMounted(async () => { try { await store.readConfig(); Object.assign(form, store.config!.saved); } catch (cause) { message.value = (cause as Error).message; } });
 async function save() {
   busy.value = true; message.value = '';
@@ -17,6 +17,8 @@ async function save() {
     <template v-if="form.source === 'live-readonly'">
       <label>调用会话 ID<input v-model="form.callerThreadId" aria-label="调用会话 ID" placeholder="明确指定的 Codex 会话 UUID" /></label>
       <label>本机工具管道<input v-model="form.pipe" aria-label="本机工具管道" placeholder="留空仅在候选唯一时选择" /></label>
+      <label>卡片明细来源（可选）<input v-model="form.cardExecutable" aria-label="卡片来源 Codex CLI" placeholder="明确指定本机 codex.exe 绝对路径；留空不读取卡片" /></label>
+      <label><input v-model="form.allowCardConsumption" type="checkbox" aria-label="允许真实指定卡消费来源" />允许此来源用于真实指定卡消费（每笔仍需指定卡、时间和消费授权）</label>
       <p class="muted">多个实例时请填写明确管道。断连后不会改选其他实例。额度与连接状态来自当前桌面，只读查询不推进任务。</p>
     </template>
     <p v-if="store.config?.override" class="notice">本次存在启动参数覆盖。下次启动请移除相应参数以使用已保存配置。</p><p v-if="store.config?.restartRequired" class="notice">已保存配置与当前运行不同，下次启动生效。</p>

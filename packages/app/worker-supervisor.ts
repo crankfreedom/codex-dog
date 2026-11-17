@@ -1,9 +1,10 @@
 import type { Request, Response } from '../contracts/protocol.ts';
-import { failure, responseSchema } from '../contracts/protocol.ts';
+import { failure, responseSchema,scopeSchema } from '../contracts/protocol.ts';
+import type { Scope } from '../contracts/protocol.ts';
 import type { ActorRef } from '../modules/persistence/stage3-ports.ts';
 
 export interface RuntimeChild { pid: number | undefined; send(value: unknown): void; kill(): void; onMessage(listener: (message: unknown) => void): void; onExit(listener: () => void): void }
-export interface SupervisorOptions { spawn(): RuntimeChild; newId(): string; now(): number; heartbeatTimeout?: number; requestTimeout?: number; startupTimeout?: number; restartDelay?: number; maxRestarts?: number; authorize?:(actor:ActorRef,scope:'read'|'settings.manage')=>void }
+export interface SupervisorOptions { spawn(): RuntimeChild; newId(): string; now(): number; heartbeatTimeout?: number; requestTimeout?: number; startupTimeout?: number; restartDelay?: number; maxRestarts?: number; authorize?:(actor:ActorRef,scope:Scope)=>void;notify?:(kind:'quota_recovered'|'task_completed'|'reset_result')=>void }
 export class WorkerSupervisor {
   private options: SupervisorOptions;
   private child?: RuntimeChild;
@@ -14,11 +15,12 @@ export class WorkerSupervisor {
   private generation = 0;
   private reason: string | null = null;
   private provider?: Record<string, unknown>;
+  private schemaVersion:number|null=null;
   private monitor?: NodeJS.Timeout;
   private restartTimer?: NodeJS.Timeout;
   private pending = new Map<string, { requestId: string; resolve(value: Response): void; timer: NodeJS.Timeout }>();
   constructor(options: SupervisorOptions) { this.options = options; }
-  health() { return { state: this.state, workerPid: this.child?.pid ?? null, inFlight: this.pending.size, heartbeatAgeMs: this.lastBeat ? Math.max(0, this.options.now() - this.lastBeat) : null, restartCount: this.restarts, maxRestarts: this.options.maxRestarts ?? 3, reason: this.reason, ...(this.provider ? { provider: this.provider } : {}) }; }
+  health() { return { schemaVersion:this.schemaVersion,state: this.state, workerPid: this.child?.pid ?? null, inFlight: this.pending.size, heartbeatAgeMs: this.lastBeat ? Math.max(0, this.options.now() - this.lastBeat) : null, restartCount: this.restarts, maxRestarts: this.options.maxRestarts ?? 3, reason: this.reason, ...(this.provider ? { provider: this.provider } : {}) }; }
   async start() {
     if (this.monitor) throw new Error('Supervisor already started');
     this.monitor = setInterval(() => {
@@ -38,10 +40,11 @@ export class WorkerSupervisor {
       const timer = setTimeout(() => { this.reason = 'startup_timeout'; reject(new Error('业务进程启动超时')); child.kill(); }, this.options.startupTimeout ?? 5000);
       child.onMessage(raw => {
         if (generation !== this.generation || !raw || typeof raw !== 'object') return;
-        const message = raw as { type?: string; id?: string; result?: unknown; provider?: Record<string, unknown>;actor?:ActorRef;scope?:'read'|'settings.manage' };
-        if(message.type==='authorize'&&message.id){let allowed=false,code='AUTH_REVOKED';try{if(this.closing){code='APP_STOPPING';throw new Error();}if(!message.actor||!['read','settings.manage'].includes(message.scope??'')||!this.options.authorize)throw new Error();this.options.authorize(message.actor,message.scope!);allowed=true;}catch(error){if(error&&typeof error==='object'&&'code'in error&&error.code==='APP_STOPPING')code='APP_STOPPING';}child.send({type:'authorized',id:message.id,allowed,code:allowed?undefined:code});return;}
+        const message = raw as { type?: string; id?: string; result?: unknown; provider?: Record<string, unknown>;actor?:ActorRef;scope?:Scope;kind?:string;schemaVersion?:number };
+        if(message.type==='authorize'&&message.id){let allowed=false,code='AUTH_REVOKED';try{if(this.closing){code='APP_STOPPING';throw new Error();}if(!message.actor||!scopeSchema.safeParse(message.scope).success||!this.options.authorize)throw new Error();this.options.authorize(message.actor,message.scope!);allowed=true;}catch(error){if(error&&typeof error==='object'&&'code'in error&&['APP_STOPPING','PERMISSION_DENIED'].includes(String(error.code)))code=String(error.code);}child.send({type:'authorized',id:message.id,allowed,code:allowed?undefined:code});return;}
         if(this.closing)return;
-        if (message.provider) this.provider = message.provider;
+        if(message.type==='notification'){if(['quota_recovered','task_completed','reset_result'].includes(message.kind??''))this.options.notify?.(message.kind as 'quota_recovered'|'task_completed'|'reset_result');return;}
+        if (message.provider) this.provider = message.provider;if(Number.isInteger(message.schemaVersion)&&Number(message.schemaVersion)>0)this.schemaVersion=Number(message.schemaVersion);
         if (message.type === 'ready') { ready = true; clearTimeout(timer); this.state = 'running'; this.lastBeat = this.options.now(); resolve(); }
         else if (message.type === 'heartbeat') this.lastBeat = this.options.now();
         else if (message.id) {
@@ -76,6 +79,7 @@ export class WorkerSupervisor {
   }
   private rejectPending(code: string) { for (const item of this.pending.values()) { clearTimeout(item.timer); item.resolve(failure(code, '业务进程状态已变化', item.requestId)); } this.pending.clear(); }
   testControl(type: string) { this.child?.send({ type }); }
+  environment(type:'suspend'|'resume'){if(!this.closing)this.child?.send({type:'environment:'+type});}
   async stop() {
     this.closing = true; this.state = 'stopping'; clearInterval(this.monitor); clearTimeout(this.restartTimer); this.rejectPending('APP_STOPPING');
     const child = this.child;

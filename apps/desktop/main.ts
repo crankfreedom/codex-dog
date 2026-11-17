@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, utilityProcess, Tray, Menu, nativeImage,shell } from 'electron';
+import type {SourceSelection} from '../../packages/app/source-configuration.ts';
+import { app, BrowserWindow, ipcMain, utilityProcess, Tray, Menu, nativeImage,shell,Notification,powerMonitor } from 'electron';
 import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { writeFile, rename, readFile, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -53,19 +54,20 @@ let window: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let quitTimer: NodeJS.Timeout | undefined;
 const configuration = new SourceConfiguration(new FileSourceStore(join(paths.directory, 'source.json')));
-let selection = { source: sourceMode, callerThreadId: argument('codex-caller-thread', process.env.CODEX_THREAD_ID ?? ''), pipe: argument('codex-pipe', '') };
+let selection:SourceSelection = { source: sourceMode, callerThreadId: argument('codex-caller-thread', process.env.CODEX_THREAD_ID ?? ''), pipe: argument('codex-pipe', '') };
 function showWindow() { if (stopping || !window || window.isDestroyed()) return; if (window.isMinimized()) window.restore(); window.show(); window.focus(); }
 const access = new AccessService({ store: new FileAccessStore(join(paths.directory, 'access.json')), now: () => Date.now(), newCode: () => randomBytes(3).toString('hex').toUpperCase(),
   digest: value => createHash('sha256').update(value).digest('hex'), equal: (a, b) => { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); } });
-const runtime = new WorkerSupervisor({ authorize:(actor,scope)=>{if(stopping)throw new Stage3Error('APP_STOPPING','应用正在退出');access.assertRevision(actor,scope);},now: () => performance.now(), newId: randomUUID, requestTimeout: 45000, startupTimeout: 45000, spawn: () => {
+const runtime = new WorkerSupervisor({notify:kind=>{if(stopping||!Notification.isSupported())return;const messages={quota_recovered:'额度已恢复；仅观察任务保持观察。',task_completed:'已核对任务完成，请查看任务归档。',reset_result:'重置卡预约状态有更新，请查看预约与消费核对。'};const notification=new Notification({title:'Codex Dog · 守码犬',body:messages[kind],icon:join(__dirname,'icon.png')});notification.on('click',showWindow);notification.show();}, authorize:(actor,scope)=>{if(stopping)throw new Stage3Error('APP_STOPPING','应用正在退出');access.assertRevision(actor,scope);},now: () => performance.now(), newId: randomUUID, requestTimeout: 45000, startupTimeout: 45000, spawn: () => {
   const child = utilityProcess.fork(join(__dirname, 'worker.cjs'), [], { serviceName: 'Codex Dog business worker', stdio: 'pipe', env: { ...process.env, CODEX_DOG_FIXTURE: scenario,
-    CODEX_DOG_PARENT_PID: String(process.pid), CODEX_DOG_SOURCE: sourceMode, CODEX_DOG_CODEX_PIPE: selection.pipe, CODEX_DOG_CALLER: selection.callerThreadId, CODEX_DOG_CODEX_HOME: argument('codex-home', process.env.CODEX_HOME ?? ''), CODEX_DOG_DATA_DIRECTORY: paths.directory, CODEX_DOG_TEST_HOOKS: testHooks ? '1' : '0', CODEX_DOG_TEST_EXPORT_DELAY_MS:testHooks?argument('test-export-delay-ms','5'):'5',CODEX_DOG_TEST_DELAY_MS: testHooks ? argument('test-delay-ms', '0') : '0' } });
+    CODEX_DOG_CARD_EXECUTABLE:selection.cardExecutable??'',CODEX_DOG_ALLOW_CARD_CONSUMPTION:selection.allowCardConsumption===true?'1':'0',CODEX_DOG_TEST_DELIVERY_LOSS:testHooks&&argument('test-delivery-loss','0')==='1'?'1':'0',CODEX_DOG_TEST_CARD_LOSS:testHooks&&argument('test-card-loss','0')==='1'?'1':'0',CODEX_DOG_PARENT_PID: String(process.pid), CODEX_DOG_SOURCE: sourceMode, CODEX_DOG_CODEX_PIPE: selection.pipe, CODEX_DOG_CALLER: selection.callerThreadId, CODEX_DOG_CODEX_HOME: argument('codex-home', process.env.CODEX_HOME ?? ''), CODEX_DOG_DATA_DIRECTORY: paths.directory, CODEX_DOG_TEST_HOOKS: testHooks ? '1' : '0', CODEX_DOG_TEST_EXPORT_DELAY_MS:testHooks?argument('test-export-delay-ms','5'):'5',CODEX_DOG_TEST_DELAY_MS: testHooks ? argument('test-delay-ms', '0') : '0' } });
   child.stderr?.on('data', () => console.error('业务进程报告错误，请查看诊断状态'));
   return { get pid() { return child.pid; }, send: value => child.postMessage(value), kill: () => { child.kill(); }, onMessage: listener => { child.on('message', listener); }, onExit: listener => { child.once('exit', listener); } };
 } });
 const updateBackend = new WindowsUpdateBackend({ packaged: app.isPackaged, testDistribution: distribution?.kind === 'g05-test', executable: process.execPath, directory: paths.directory, ...(distribution?.kind === 'release' ? { release: { channel: distribution.channel, publisherName: distribution.publisherName, signatureScript: join(process.resourcesPath, 'verify-signature.ps1') } } : {}), ...(process.argv.some(a => a.startsWith('--g05-fixture-port=')) ? { fixturePort: Number(argument('g05-fixture-port', '0')) } : {}) });
 const updates = new UpdateService({ backend: updateBackend, store: new FileUpdateStore(join(paths.directory, 'updates.json')), version: app.isPackaged ? app.getVersion() : version, channel: distribution?.kind === 'release' ? distribution.channel : 'beta', unsignedTestDistribution: distribution?.kind !== 'release', now: Date.now, newId: randomUUID,
   digest: value => createHash('sha256').update(value).digest('hex'), lifecycle: {
+    recoverPreparation:async()=>{if(stopping)return;const result=await runtime.invoke({apiVersion,requestId:randomUUID(),operation:'system.cancel-prepare-update',params:{}});if(!result.ok)throw new UpdateError('APP_NOT_READY','更新准备失败后业务恢复仍需核对');},
     prepare: async installId => {
       await assertCliFree();
       const result = await runtime.invoke({ apiVersion, requestId: randomUUID(), operation: 'system.prepare-update', params: { installId } });
@@ -87,6 +89,7 @@ const updates = new UpdateService({ backend: updateBackend, store: new FileUpdat
 const appearance=new AppearancePreview({newId:randomUUID,visible:()=>!!window&&!window.isDestroyed()&&window.isVisible()&&!stopping,apply:(values,previewId)=>{if(window&&!window.isDestroyed())window.webContents.send('dog:appearance',{values,previewId});},read:async()=>{const result=await runtime.invoke({apiVersion,requestId:randomUUID(),operation:'appearance.get',params:{}},{kind:'desktop',clientId:'desktop',revision:1});if(!result.ok)throw new Error('外观设置读取失败');return result.data as unknown as import('../../packages/modules/persistence/stage3-ports.ts').SettingView;}});
 const router = new HostRouter(access, runtime, { runtimeId: instanceId, handlerInstanceId: randomUUID() }, sourceMode, updates, { configuration,appearance, desktop: {
   openDataDirectory:async()=>{const error=await shell.openPath(paths.directory);if(error)throw new Error('固定目录无法打开');},
+  openConsole:()=>{if(!window||window.isDestroyed())throw new Stage3Error('WINDOW_UNAVAILABLE','诊断窗口不可用');window.webContents.openDevTools({mode:'detach'});},
   show: showWindow, quit: finalGuard => { quitTimer ??= setTimeout(() => { quitTimer = undefined; try { finalGuard(); app.quit(); } catch { /* 派发前授权已撤销，取消退出。 */ } }, 400); }, status: () => ({ windowVisible: window?.isVisible() ?? false, trayAvailable: !!tray && !tray.isDestroyed() }),
 } });
 const pipe = new SecurePipeHost({ script: app.isPackaged ? join(process.resourcesPath, 'app.asar.unpacked/out/windows-pipe.ps1') : join(__dirname, 'windows-pipe.ps1'), pipe: paths.pipe, directory: paths.directory, failed: () => { if (!stopping) app.quit(); },
@@ -121,6 +124,7 @@ async function start() {
   if (testHooks && sourceMode !== 'fixture') throw new Error('测试 bridge 只允许模拟模式');
   if (stopping) throw new Error('启动已取消');
   startupPhase('worker'); await runtime.start();
+  powerMonitor.on('suspend',()=>runtime.environment('suspend'));powerMonitor.on('resume',()=>runtime.environment('resume'));
   if (stopping) throw new Error('启动已取消');
   startupPhase('update'); updateBackend.start(); await updates.start();
   initialized = true;
@@ -144,12 +148,7 @@ async function start() {
     return runtime.invoke({ apiVersion, requestId: randomUUID(), operation: 'g03.test', params });
   });
   await window.loadFile(join(__dirname, 'renderer/index.html'));
-  const pixels = Buffer.alloc(20 * 20 * 4);
-  for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
-    const inside = (x - 10) ** 2 + (y - 10) ** 2 < 90; const eye = y >= 7 && y <= 9 && (x >= 5 && x <= 7 || x >= 12 && x <= 14); const nose = y >= 12 && y <= 14 && x >= 8 && x <= 11;
-    const i = (y * 20 + x) * 4; pixels[i] = eye || nose ? 255 : 25; pixels[i + 1] = eye || nose ? 255 : 112; pixels[i + 2] = eye || nose ? 255 : 98; pixels[i + 3] = inside ? 255 : 0;
-  }
-  tray = new Tray(nativeImage.createFromBitmap(pixels, { width: 20, height: 20 }));
+  tray = new Tray(nativeImage.createFromPath(join(__dirname,'icon.png')).resize({width:20,height:20}));
   tray.setToolTip('Codex Dog · 关闭窗口后继续运行');
   tray.setContextMenu(Menu.buildFromTemplate([{ label: '打开 Codex Dog', click: showWindow }, { type: 'separator' }, { label: '退出并停止监控', click: () => app.quit() }]));
   tray.on('double-click', showWindow); tray.on('click', showWindow);

@@ -14,7 +14,7 @@ export class DiagnosticsService {
       const thread=await this.ports.thread(threadRef);check('thread',thread.statusKnown===true?'passed':'unknown',thread.statusKnown===true?'target_identity_verified':'thread_status_unknown');
       const goal=thread.goal as {availability?:string;current?:unknown};check('goal',goal?.availability==='known'?'passed':'unknown',goal?.availability==='known'?(goal.current===null?'no_current_goal':'goal_identity_observed'):'goal_unknown');
     }catch(error){check('thread','unknown',this.code(error));check('goal','not_checked','target_read_failed');}
-    check('goal_account_binding','not_checked','cross_source_binding_unverified');check('automation','not_checked','CAPABILITY_UNSUPPORTED','local');
+    check('goal_account_binding','not_checked','cross_source_binding_unverified');check('automation',mode==='fixture'?'passed':'not_checked',mode==='fixture'?'fixture_automation_only':'TARGET_BINDING_UNVERIFIED','local');
     return {status:summarize(checks),checks,mode,source,observedAt:new Date(this.ports.now()).toISOString(),stale:false,completionConfirmed:false,readOnly:true};
   }
   private code(error:unknown){return error&&typeof error==='object'&&'code'in error&&typeof error.code==='string'&&/^[A-Z_]{1,80}$/.test(error.code)?error.code:'PROVIDER_UNAVAILABLE';}

@@ -1,0 +1,11 @@
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {spawn} from 'node:child_process';
+import electron from 'electron';
+const svg=await readFile('build/icon.svg','utf8');await mkdir('.cache/icon',{recursive:true});
+const source=`const {app,BrowserWindow}=require('electron');const fs=require('node:fs');app.disableHardwareAcceleration();app.commandLine.appendSwitch('force-device-scale-factor','1');app.whenReady().then(async()=>{const win=new BrowserWindow({show:false,width:512,height:512,transparent:true,frame:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});await win.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(${JSON.stringify('<html><style>html,body{margin:0;width:512px;height:512px;background:transparent}svg{width:512px;height:512px}</style>'+svg+'</html>')}));await new Promise(resolve=>setTimeout(resolve,300));const image=await win.webContents.capturePage();for(const size of [16,24,32,48,64,128,256,512])fs.writeFileSync(${JSON.stringify(resolve('.cache/icon'))}+'/'+size+'.png',image.resize({width:size,height:size,quality:'best'}).toPNG());app.quit();}).catch(error=>{console.error(error.message);app.exit(1);});`;
+const script=resolve('.cache/icon/render.cjs');await writeFile(script,source);const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+await new Promise((done,reject)=>{const child=spawn(electron,[script],{windowsHide:true,env,stdio:'inherit'});child.once('error',reject);child.once('exit',code=>code===0?done():reject(new Error('图标渲染失败')));});
+const sizes=[16,24,32,48,64,128,256],images=await Promise.all(sizes.map(size=>readFile('.cache/icon/'+size+'.png'))),header=Buffer.alloc(6+16*sizes.length);header.writeUInt16LE(1,2);header.writeUInt16LE(sizes.length,4);let offset=header.length;
+for(let i=0;i<sizes.length;i++){const start=6+i*16;header[start]=sizes[i]===256?0:sizes[i];header[start+1]=header[start];header.writeUInt16LE(1,start+4);header.writeUInt16LE(32,start+6);header.writeUInt32LE(images[i].length,start+8);header.writeUInt32LE(offset,start+12);offset+=images[i].length;}
+await writeFile('build/icon.ico',Buffer.concat([header,...images]));await writeFile('build/icon.png',await readFile('.cache/icon/256.png'));console.log('已从版本化 SVG 生成七种尺寸的正式 ICO 和 PNG；未配置签名。');
