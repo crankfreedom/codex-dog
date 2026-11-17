@@ -16,7 +16,7 @@
     "dev": "pnpm build && pnpm start",
     "cli": "node out/cli.cjs",
     "pack:cli": "node scripts/pack-cli.mjs",
-    "install:electron": "node node_modules/electron/install.js",
+    "install:electron": "node scripts/ensure-electron.mjs",
     "test": "node --test test/*.test.ts test/*.test.mjs",
     "test:g01": "node scripts/g02-smoke.mjs --g01-only",
     "check:boundaries": "node scripts/check-boundaries.mjs",

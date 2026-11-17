@@ -15,6 +15,9 @@ for (const name of await readdir('.github/workflows')) {
   const text = await readFile('.github/workflows/' + name, 'utf8'); const document = parseDocument(text, { uniqueKeys: true }); assert.equal(document.errors.length, 0, name + ' YAML'); const value = document.toJS();
   assert.equal(value.permissions.contents, 'read'); assert(!value.on.release && !value.on.pull_request_target, '不使用发布事件或高权限 PR 入口');
   for (const job of Object.values(value.jobs)) {
+    const installIndex = job.steps.findIndex(step => step.run === 'pnpm install:electron');
+    const buildIndex = job.steps.findIndex(step => step.run === 'pnpm build');
+    assert(installIndex >= 0 && installIndex < buildIndex, '必须在编译/实装之前显式准备 Electron 运行时');
     assert.equal(job['runs-on'], 'windows-2025'); assert(job['timeout-minutes'] <= 45);
     assert(!job.permissions, '当前不增加 job 写权限');
     for (const step of job.steps) {

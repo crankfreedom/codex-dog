@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { _electron } from '@playwright/test';
+import { launchSmokeHost } from './electron-smoke-host.mjs';
+import { windowsPowerShellEnvironment, isWindowsPowerShell } from '../packages/infrastructure/windows-powershell.ts';
 
 const pack = JSON.parse(await readFile('artifacts/g06/package.json', 'utf8')); assert.equal(pack.mode, 'preview'); assert.equal(pack.signed, false);
 const directory = resolve('artifacts/g06/installed', pack.runId); const executable = join(directory, pack.executable); const cli = join(directory, 'resources/cli/codex-dog.exe');
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 async function command(file, args) {
   return new Promise((resolveCall, reject) => {
-    const child = spawn(file, args, { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', data => { stdout += data; }); child.stderr.resume();
+    const child = spawn(file, args, { env: isWindowsPowerShell(file) ? windowsPowerShellEnvironment(env) : env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', data => { stdout += data; }); child.stderr.resume();
     const timer = setTimeout(() => { child.kill(); reject(new Error('隔离 G06 子进程超时')); }, 180000);
     child.once('error', error => { clearTimeout(timer); reject(error); }); child.once('exit', code => { clearTimeout(timer); resolveCall({ code, stdout }); });
   });
@@ -18,7 +19,7 @@ const checks = []; const pageErrors = []; let desktop;
 const mark = text => { checks.push(text); console.log('[G06] ' + text); };
 try {
   await mkdir(directory, { recursive: true }); assert.equal((await command(pack.installer, ['/S', '/D=' + directory])).code, 0); await access(executable); await access(cli);
-  desktop = await _electron.launch({ executablePath: executable, env }); const page = await desktop.firstWindow(); page.on('pageerror', error => pageErrors.push(error.message)); await page.waitForFunction(() => document.getElementById('state')?.textContent?.includes('source=fixture'));
+  const host = await launchSmokeHost({ executablePath: executable, env }, 'g06'); desktop = host.desktop; const page = host.page; page.on('pageerror', error => pageErrors.push(error.message)); await page.waitForFunction(() => document.getElementById('state')?.textContent?.includes('source=fixture'));
   const request = (operation, params = {}) => page.evaluate(({ operation, params }) => window.codexDog.request(operation, params), { operation, params });
   const version = await request('app.version'); assert.equal(version.data.version, pack.version); assert.equal((await command(cli, ['--version'])).stdout.trim(), pack.version); assert.equal((await request('app.status')).data.realCodexConnected, false);
   mark('实际 per-user Preview NSIS 安装，主应用/worker/独立 CLI 版本一致，强制模拟数据');

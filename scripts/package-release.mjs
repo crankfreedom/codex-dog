@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { resolve, join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { releasePolicy } from '../build/release-policy.mjs';
+import { windowsPowerShellEnvironment, isWindowsPowerShell } from '../packages/infrastructure/windows-powershell.ts';
 
 const runId = randomUUID().slice(0, 8);
 const policy = releasePolicy(process.env.DOG_RELEASE_MODE ?? 'preview', process.env.DOG_RELEASE_VERSION ?? '0.6.0-beta.1', runId, process.env);
@@ -13,7 +14,8 @@ if (process.argv.includes('--check')) { console.log(JSON.stringify({ mode: polic
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('当前只支持 Windows x64 构建');
 async function command(executable, args, variables = {}) {
   return new Promise((resolveCall, reject) => {
-    const child = spawn(executable, args, { env: { ...process.env, ...variables }, windowsHide: true, stdio: 'inherit' });
+    const environment = { ...process.env, ...variables };
+    const child = spawn(executable, args, { env: isWindowsPowerShell(executable) ? windowsPowerShellEnvironment(environment) : environment, windowsHide: true, stdio: 'inherit' });
     child.once('error', reject); child.once('exit', code => code === 0 ? resolveCall() : reject(new Error('发行构建步骤失败')));
   });
 }
@@ -22,6 +24,7 @@ const output = resolve('release/g06', policy.mode, policy.version, runId);
 await mkdir(app, { recursive: true }); await mkdir(resources, { recursive: true });
 const cli = join(resources, 'codex-dog.exe');
 try {
+  await command(process.execPath, ['scripts/ensure-electron.mjs']);
   await command(process.execPath, ['scripts/build.mjs'], { DOG_BUILD_VERSION: policy.version });
   await command(process.execPath, ['scripts/pack-cli.mjs'], { DOG_CLI_OUTPUT: cli });
   await cp('out', join(app, 'out'), { recursive: true });

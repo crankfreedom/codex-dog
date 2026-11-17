@@ -43,6 +43,8 @@ jobs:
           node-version: 26.7.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm install:electron
+      - run: node scripts/windows-preflight.mjs
       - run: pnpm build
       - run: pnpm test
       - run: pnpm check:boundaries
@@ -68,6 +70,7 @@ jobs:
         if: inputs.mode == 'preview'
         run: pnpm test:g06
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
         with:
           name: codex-dog-${{ inputs.mode }}-${{ github.run_id }}
           path: |
@@ -75,5 +78,7 @@ jobs:
             release/g06/**/beta.yml
             artifacts/g06/package.json
             artifacts/g06/preview-report.json
-          if-no-files-found: error
+            artifacts/g06/startup-*.json
+            artifacts/g06/windows-preflight.json
+          if-no-files-found: warn
           retention-days: 7

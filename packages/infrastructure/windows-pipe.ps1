@@ -2,6 +2,7 @@ param([ValidateSet('Host','AnonymousProbe','Inspect')][string]$Mode = 'Host', [P
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+try {
 Add-Type -ReferencedAssemblies System.Web.Extensions -TypeDefinition @'
 using System;
 using System.IO;
@@ -144,3 +145,15 @@ public static class DogPipe {
 if ($Mode -eq 'AnonymousProbe') { [DogPipe]::Probe($PipeName) }
 elseif ($Mode -eq 'Inspect') { [DogPipe]::Inspect($PipeName, $Directory) }
 else { [DogPipe]::Host($PipeName, $Directory) }
+} catch {
+  $failure = $_.Exception
+  while ($null -ne $failure.InnerException) { $failure = $failure.InnerException }
+  $code = 'PIPE_HOST_INIT_FAILED'
+  $detail = [int]$failure.HResult
+  if ($failure -is [System.ComponentModel.Win32Exception]) { $code = 'PIPE_WIN32_ERROR'; $detail = $failure.NativeErrorCode }
+  elseif ($failure -is [System.UnauthorizedAccessException]) { $code = 'PIPE_ACCESS_DENIED' }
+  elseif ($failure -is [System.Security.SecurityException]) { $code = 'PIPE_SECURITY_ERROR' }
+  elseif ($failure -is [System.IO.IOException]) { $code = 'PIPE_IO_ERROR' }
+  [Console]::Out.WriteLine((@{type='fatal';code=$code;detail=$detail} | ConvertTo-Json -Compress))
+  exit 1
+}

@@ -29,6 +29,8 @@ jobs:
           node-version: 26.7.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm install:electron
+      - run: node scripts/windows-preflight.mjs
       - run: pnpm build
       - run: pnpm test
       - run: pnpm check:boundaries
@@ -44,5 +46,7 @@ jobs:
           path: |
             artifacts/g06/g02-regression/report.json
             artifacts/g06/g03-regression/report.json
+            artifacts/g06/startup-*.json
+            artifacts/g06/windows-preflight.json
           if-no-files-found: warn
           retention-days: 7

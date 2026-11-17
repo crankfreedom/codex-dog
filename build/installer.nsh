@@ -1,4 +1,5 @@
 !macro DogGuardCli
+  System::Call 'kernel32::SetEnvironmentVariable(t "PSModulePath", p 0) i .r0'
   InitPluginsDir
   File /oname=$PLUGINSDIR\dog-cli-guard.ps1 "${BUILD_RESOURCES_DIR}\cli-file-guard.ps1"
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -File "$PLUGINSDIR\dog-cli-guard.ps1" -CliPath "$INSTDIR\resources\cli\codex-dog.exe"'

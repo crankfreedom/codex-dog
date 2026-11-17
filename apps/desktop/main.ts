@@ -19,8 +19,12 @@ import { UpdateError } from '../../packages/update/ports.ts';
 import { WindowsUpdateBackend } from '../../packages/infrastructure/windows-update-backend.ts';
 import { FileUpdateStore } from '../../packages/infrastructure/update-store.ts';
 import { parseDistribution } from '../../packages/infrastructure/distribution.ts';
+import { formatStartupDiagnostic } from '../../packages/infrastructure/startup-diagnostics.ts';
+import { windowsPowerShellEnvironment } from '../../packages/infrastructure/windows-powershell.ts';
 
 const argument = (name: string, fallback: string) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
+let startupStage = 'bootstrap';
+function startupPhase(stage: string) { startupStage = stage; if (process.env.CODEX_DOG_STARTUP_DIAGNOSTICS === '1') console.error(formatStartupDiagnostic(stage, 'BEGIN')); }
 const distributionFile = app.isPackaged ? join(process.resourcesPath, existsSync(join(process.resourcesPath, 'dog-distribution.json')) ? 'dog-distribution.json' : 'g05-distribution.json') : undefined;
 const distribution = distributionFile ? parseDistribution(JSON.parse(readFileSync(distributionFile, 'utf8'))) : undefined;
 const profile = argument('profile', distribution?.profile ?? 'g02');
@@ -90,18 +94,20 @@ const pipe = new SecurePipeHost({ script: app.isPackaged ? join(process.resource
   } });
 async function start() {
   if (stopping) throw new Error('启动已取消');
+  startupPhase('pipe');
   const identity = await pipe.start(); ownerSid = identity.ownerSid;
   if (!identity.rootProtected || !identity.pipeSddl.includes(ownerSid) || !identity.pipeSddl.includes('NU')) throw new Error('Windows ACL 校验失败');
   if (stopping) throw new Error('启动已取消');
-  await access.start();
+  startupPhase('access'); await access.start();
   if (stopping) throw new Error('启动已取消');
-  await runtime.start();
+  startupPhase('worker'); await runtime.start();
   if (stopping) throw new Error('启动已取消');
-  updateBackend.start(); await updates.start();
+  startupPhase('update'); updateBackend.start(); await updates.start();
   initialized = true;
   await writeFile(paths.descriptor + '.tmp', JSON.stringify({ apiVersion, pipe: paths.pipe, appPid: process.pid, instanceId, ownerSid, brokerPid: identity.pid, transportKey }), { mode: 0o600 });
   await rename(paths.descriptor + '.tmp', paths.descriptor);
   if (stopping) throw new Error('启动已取消');
+  startupPhase('window');
   window = new BrowserWindow({ width: 900, height: 750, title: 'Codex Dog · G04 只读验证', webPreferences: { preload: join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, additionalArguments: testHooks ? ['--g03-test-hooks'] : [] } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' })); window.webContents.on('will-navigate', event => event.preventDefault());
   const inputSchema = z.object({ operation: z.string(), params: z.record(z.string(), z.unknown()), idempotencyKey: z.string().min(1).max(100).optional() }).strict();
@@ -122,7 +128,7 @@ async function assertCliFree() {
   const executable = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
   for (let attempt = 0; attempt < 5; attempt++) {
     const free = await new Promise<boolean>(resolve => {
-      const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', join(process.resourcesPath, 'cli-file-guard.ps1'), '-CliPath', join(process.resourcesPath, 'cli/codex-dog.exe')], { windowsHide: true, stdio: 'ignore' });
+      const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', join(process.resourcesPath, 'cli-file-guard.ps1'), '-CliPath', join(process.resourcesPath, 'cli/codex-dog.exe')], { windowsHide: true, stdio: 'ignore', env: windowsPowerShellEnvironment() });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 3000);
       child.once('error', () => { clearTimeout(timer); resolve(false); }); child.once('exit', code => { clearTimeout(timer); resolve(code === 0); });
     });
@@ -147,5 +153,5 @@ else {
     event.preventDefault();
     stopTask ??= stop().finally(() => { exitAllowed = true; app.exit(); });
   });
-  void app.whenReady().then(() => { if (stopping) return; startupTask = start(); void startupTask.catch(() => { console.error('应用启动失败，拒绝开放本机服务'); app.quit(); }); });
+  void app.whenReady().then(() => { if (stopping) return; startupTask = start(); void startupTask.catch(error => { console.error(formatStartupDiagnostic(startupStage, error?.code, error?.detail)); app.quit(); }); });
 }

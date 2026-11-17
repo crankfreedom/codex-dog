@@ -5,7 +5,8 @@ import { readFile, mkdir, writeFile, access } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { connect, createServer } from 'node:net';
 import electron from 'electron';
-import { _electron } from '@playwright/test';
+import { launchSmokeHost } from './electron-smoke-host.mjs';
+import { windowsPowerShellEnvironment, isWindowsPowerShell } from '../packages/infrastructure/windows-powershell.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -26,7 +27,8 @@ async function until(check, label, timeout = 15000) {
 }
 async function run(command, args, options = {}) {
   return new Promise((resolveCall, reject) => {
-    const child = spawn(command, args, { env: options.env ?? env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const environment = options.env ?? env;
+    const child = spawn(command, args, { env: isWindowsPowerShell(command) ? windowsPowerShellEnvironment(environment) : environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = '';
     const timer = setTimeout(() => { child.kill(); reject(new Error('子进程超时')); }, options.timeout ?? 20000);
     child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
@@ -40,8 +42,7 @@ async function cli(args, name = 'reader', input) {
   try { return { ...result, value: JSON.parse(result.stdout) }; } catch { throw new Error(`CLI 输出不是 JSON：${result.stdout}\n${result.stderr}`); }
 }
 async function launch() {
-  desktop = await _electron.launch({ executablePath: electron, args: ['.', `--profile=${profile}`, '--fixture=available', '--g02-test-hooks', '--test-delay-ms=800'], env, timeout: 30000 });
-  page = await desktop.firstWindow(); page.on('pageerror', error => pageErrors.push(error.message));
+  ({ desktop, page } = await launchSmokeHost({ executablePath: electron, args: ['.', `--profile=${profile}`, '--fixture=available', '--g02-test-hooks', '--test-delay-ms=800'], env, timeout: 30000 }, 'g02')); page.on('pageerror', error => pageErrors.push(error.message));
   await page.waitForFunction(() => document.getElementById('state')?.textContent?.includes('source=fixture'));
   profileDirectory = dirname(await desktop.evaluate(({ app }) => app.getPath('userData')));
   descriptor = JSON.parse(await readFile(join(profileDirectory, 'endpoint.json'), 'utf8'));

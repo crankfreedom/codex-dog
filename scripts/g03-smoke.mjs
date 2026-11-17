@@ -5,7 +5,7 @@ import { readFile, mkdir, writeFile, access, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import electron from 'electron';
-import { _electron } from '@playwright/test';
+import { launchSmokeHost } from './electron-smoke-host.mjs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -38,8 +38,7 @@ const ipc = (operation, params = {}) => page.evaluate(({ operation, params }) =>
 const fixture = params => page.evaluate(params => window.codexDogTest.fixture(params), params);
 async function successful(params) { const result = await fixture(params); assert(result.ok, JSON.stringify(result)); return result.data; }
 async function launch(hooks = true) {
-  desktop = await _electron.launch({ executablePath: electron, args: ['.', `--profile=${profile}`, '--fixture=available', ...(hooks ? ['--g02-test-hooks'] : [])], env, timeout: 30000 });
-  page = await desktop.firstWindow(); page.on('pageerror', error => pageErrors.push(error.message));
+  ({ desktop, page } = await launchSmokeHost({ executablePath: electron, args: ['.', `--profile=${profile}`, '--fixture=available', ...(hooks ? ['--g02-test-hooks'] : [])], env, timeout: 30000 }, 'g03')); page.on('pageerror', error => pageErrors.push(error.message));
   await page.waitForFunction(() => document.getElementById('state')?.textContent?.includes('source=fixture'));
   directory = dirname(await desktop.evaluate(({ app }) => app.getPath('userData')));
   descriptor = JSON.parse(await readFile(join(directory, 'endpoint.json'), 'utf8'));
