@@ -64,7 +64,7 @@ export class AccessService {
         if (old.status === 'revoked') throw new AccessError('AUTH_REVOKED', '请使用新客户端名称重新申请');
         return this.view(old);
       }
-      if (new Set(input.requestedScopes).size !== input.requestedScopes.length || input.requestedScopes.some(scope => !['read', 'access.manage'].includes(scope))) throw new AccessError('INVALID_ARGUMENT', '权限申请无效');
+      if (new Set(input.requestedScopes).size !== input.requestedScopes.length || input.requestedScopes.some(scope => !['read', 'access.manage', 'app.manage'].includes(scope))) throw new AccessError('INVALID_ARGUMENT', '权限申请无效');
       if (next.clients.length >= 1000 || next.clients.filter(item => item.status === 'pending' && item.pairingExpiresAt > this.ports.now()).length >= 32) throw new AccessError('CLIENT_LIMIT', '待配对客户端达到上限');
       const client: ClientRecord = { id: credential.clientId, label: input.clientLabel, secretHash, requestedScopes: [...input.requestedScopes], scopes: [], status: 'pending', revision: 1, createdAt: this.ports.now(), pairingExpiresAt: this.ports.now() + 300000, expiresAt: null, code: this.ports.newCode() };
       next.clients.push(client); return this.view(client);

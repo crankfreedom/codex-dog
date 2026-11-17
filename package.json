@@ -1,7 +1,7 @@
 {
   "name": "codex-dog",
   "productName": "Codex Dog",
-  "version": "0.4.0-g04",
+  "version": "0.5.0-g05",
   "private": true,
   "type": "module",
   "main": "out/main.cjs",
@@ -23,17 +23,26 @@
     "check:docs": "node scripts/check-docs.mjs",
     "test:g02": "node scripts/g02-smoke.mjs",
     "test:g03": "node scripts/g03-smoke.mjs",
-    "test:g04": "node scripts/g04-smoke.mjs"
+    "test:g04": "node scripts/g04-smoke.mjs",
+    "pack:g05": "node scripts/package-g05.mjs",
+    "test:g05": "node scripts/g05-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
+    "builder-util-runtime": "9.7.0",
+    "electron-updater": "6.8.11",
+    "semver": "7.7.3",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
     "@types/node": "24.19.2",
+    "@types/semver": "7.7.1",
     "electron": "45.0.0",
+    "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
     "typescript": "5.9.3"
-  }
+  },
+  "description": "Codex Dog 独立桌面管理工具（G05 测试）",
+  "author": "crankfreedom"
 }

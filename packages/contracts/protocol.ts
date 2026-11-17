@@ -1,18 +1,21 @@
 import { z } from 'zod';
 
-export const version = '0.4.0-g04';
+declare const __DOG_BUILD_VERSION__: string;
+export const version = typeof __DOG_BUILD_VERSION__ === 'string' ? __DOG_BUILD_VERSION__ : '0.5.0-g05';
 export const apiVersion = '3';
 export const emptyParams = z.object({}).strict();
 export const describeParams = z.object({ operation: z.string().min(1).max(100) }).strict();
-export const scopeSchema = z.enum(['read', 'access.manage']);
+export const scopeSchema = z.enum(['read', 'access.manage', 'app.manage']);
 export type Scope = z.infer<typeof scopeSchema>;
 export const credentialSchema = z.object({ clientId: z.string().uuid(), secret: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 export type Credential = z.infer<typeof credentialSchema>;
-export const accessRequestParams = z.object({ clientLabel: z.string().trim().min(1).max(80), requestedScopes: z.array(scopeSchema).min(1).max(2) }).strict();
-export const accessGrantParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive(), code: z.string().regex(/^[A-F0-9]{6}$/), scopes: z.array(scopeSchema).min(1).max(2), expiresAt: z.string().datetime({ offset: true }).nullable().default(null) }).strict();
+export const accessRequestParams = z.object({ clientLabel: z.string().trim().min(1).max(80), requestedScopes: z.array(scopeSchema).min(1).max(3) }).strict();
+export const accessGrantParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive(), code: z.string().regex(/^[A-F0-9]{6}$/), scopes: z.array(scopeSchema).min(1).max(3), expiresAt: z.string().datetime({ offset: true }).nullable().default(null) }).strict();
 export const accessRevokeParams = z.object({ id: z.string().uuid(), expectedRevision: z.number().int().positive() }).strict();
 export const threadRefParams = z.object({ connectionId: z.string().uuid(), threadId: z.string().uuid() }).strict();
 export const threadListParams = z.object({ connectionId: z.string().uuid(), limit: z.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(2000).optional(), archived: z.boolean().default(false) }).strict();
+export const updateDownloadParams = z.object({ candidateId: z.string().uuid(), expectedVersion: z.string().min(1).max(80) }).strict();
+export const updateInstallParams = z.object({ artifactId: z.string().uuid(), expectedVersion: z.string().min(1).max(80), confirm: z.literal(true) }).strict();
 export const liveOperations = new Set(['connections.discover', 'connections.get', 'quota.refresh', 'threads.list', 'threads.get', 'goals.get']);
 export const workerOperations = new Set(['quota.get', ...liveOperations]);
 export const definitions = [
@@ -27,6 +30,10 @@ export const definitions = [
   { operation: 'threads.list', command: ['threads', 'list'], tool: 'threads_list', description: '分页读取本机 Codex 会话身份及状态，不含正文或摘要。', input: threadListParams, scope: 'read', readOnly: true },
   { operation: 'threads.get', command: ['threads', 'get'], tool: 'threads_get', description: '读取会话和最新轮次状态，核对前后 Goal，不含正文。', input: threadRefParams, scope: 'read', readOnly: true },
   { operation: 'goals.get', command: ['goals', 'get'], tool: 'goals_get', description: '只读 Goal 身份及状态，明确未知和无当前 Goal。', input: threadRefParams, scope: 'read', readOnly: true },
+  { operation: 'updates.status', command: ['updates', 'status'], tool: 'updates_status', description: '读取固定 GitHub beta 测试更新状态与持久操作结果。', input: emptyParams, scope: 'read', readOnly: true },
+  { operation: 'updates.check', command: ['updates', 'check'], tool: 'updates_check', description: '检查固定更新仓库，不自动下载或安装。', input: emptyParams, scope: 'read', readOnly: true },
+  { operation: 'updates.download', command: ['updates', 'download'], tool: 'updates_download', description: '下载固定候选，返回持久操作 ID。', input: updateDownloadParams, scope: 'app.manage', readOnly: false },
+  { operation: 'updates.install', command: ['updates', 'install'], tool: 'updates_install', description: '明确确认安装，先检查 CLI 占用、备份并清理进程。', input: updateInstallParams, scope: 'app.manage', readOnly: false },
   { operation: 'access.request', command: ['access', 'request'], tool: 'access_request', description: '申请授权；只创建待配对记录，不能自授权限。', input: accessRequestParams, scope: 'pairing', readOnly: false },
   { operation: 'access.list', command: ['access', 'list'], tool: 'access_list', description: '查看客户端与配对申请，不包含凭据。', input: emptyParams, scope: 'access.manage', readOnly: true },
   { operation: 'access.grant', command: ['access', 'grant'], tool: 'access_grant', description: '明确批准指定申请与权限，须管理权限。', input: accessGrantParams, scope: 'access.manage', readOnly: false },
@@ -48,8 +55,8 @@ export function exitCode(result: Response): number {
   if (result.ok) return 0;
   if (['INVALID_ARGUMENT', 'INPUT_TOO_LARGE'].includes(result.error.code)) return 2;
   if (['PERMISSION_DENIED', 'AUTH_REQUIRED', 'AUTH_REVOKED'].includes(result.error.code)) return 3;
-  if (['APP_NOT_READY', 'APP_STOPPING', 'REVISION_CONFLICT', 'IDEMPOTENCY_CONFLICT', 'PAIRING_EXPIRED', 'CLIENT_LIMIT', 'CONNECTION_IDENTITY_CHANGED', 'TARGET_IDENTITY_MISMATCH', 'GOAL_IDENTITY_CHANGED'].includes(result.error.code)) return 4;
-  if (['APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE'].includes(result.error.code)) return 5;
+  if (['APP_NOT_READY', 'APP_STOPPING', 'REVISION_CONFLICT', 'IDEMPOTENCY_CONFLICT', 'PAIRING_EXPIRED', 'CLIENT_LIMIT', 'CONNECTION_IDENTITY_CHANGED', 'TARGET_IDENTITY_MISMATCH', 'GOAL_IDENTITY_CHANGED', 'UPDATE_BUSY', 'UPDATE_VERSION_REJECTED', 'CLI_IN_USE', 'UPDATE_HISTORY_FULL'].includes(result.error.code)) return 4;
+  if (['APP_NOT_RUNNING', 'CAPABILITY_UNSUPPORTED', 'READ_TIMEOUT', 'PROTOCOL_INCOMPATIBLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_SELECTION_REQUIRED', 'PROVIDER_SCHEMA_UNSUPPORTED', 'PROVIDER_IDENTITY_UNAVAILABLE', 'UPDATE_UNSUPPORTED', 'UPDATE_SOURCE_UNAVAILABLE', 'UPDATE_METADATA_INVALID', 'UPDATE_INTEGRITY_FAILED', 'UPDATE_DOWNLOAD_FAILED', 'UPDATE_INSTALL_FAILED'].includes(result.error.code)) return 5;
   if (result.error.code === 'OPERATION_UNCERTAIN') return 6;
   return 7;
 }

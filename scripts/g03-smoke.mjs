@@ -68,7 +68,7 @@ try {
   transport = new StdioClientTransport({ command: executable, args: ['mcp', 'serve', '--profile', profile, '--client', 'reader'], env: { ...env, PATH: '', NODE_OPTIONS: '' }, stderr: 'pipe' });
   client = new Client({ name: 'g03-validation', version: '1' }); await client.connect(transport); transport.stderr?.resume();
   const mcp = await client.callTool({ name: 'quota_get', arguments: {} }); assert.deepEqual(mcp.structuredContent.data, first.data); assert.equal(mcp.structuredContent.meta.handlerInstanceId, first.meta.handlerInstanceId);
-  assert.equal((await client.listTools()).tools.length, 15);
+  assert.equal((await client.listTools()).tools.length, 19);
   mark('配对后独立 EXE、IPC 与官方 MCP 客户端共用 SQLite 初始化的同一额度快照和处理器');
   assert.equal((await ipc('g03.test')).error.code, 'CAPABILITY_UNSUPPORTED');
   mark('G03 事务探针未注册公开能力目录，普通业务入口不能调用');

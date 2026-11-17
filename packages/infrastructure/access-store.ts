@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { AccessState, AccessStorePort } from '../modules/access/service.ts';
 
-const scopes = z.array(z.enum(['read', 'access.manage'])).max(2);
+const scopes = z.array(z.enum(['read', 'access.manage', 'app.manage'])).max(3);
 const stateSchema = z.object({ schemaVersion: z.literal(1), clients: z.array(z.object({ id: z.string().uuid(), label: z.string().max(80), secretHash: z.string().regex(/^[a-f0-9]{64}$/), requestedScopes: scopes, scopes,
   status: z.enum(['pending', 'granted', 'revoked']), revision: z.number().int().positive(), createdAt: z.number(), pairingExpiresAt: z.number(), expiresAt: z.number().nullable(), code: z.string().max(6) }).strict()).max(1000),
   requests: z.array(z.object({ key: z.string(), hash: z.string(), result: z.record(z.string(), z.unknown()), at: z.number() }).strict()).max(2048) }).strict();

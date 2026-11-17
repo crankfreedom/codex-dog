@@ -1,8 +1,21 @@
 # GitHub 在线更新方案
 
-> 原计划 0.4 的设计基线按职责迁入本文件；具体实现状态以 [G04 实施记录](g04.md) 为准。设计目录不等于已实现能力。
+> 原计划 0.4 的设计基线按职责迁入本文件；当前更新实现及验证状态以 [G05 实施记录](g05.md) 为准。设计目录不等于已实现能力。
 
 ## 独立在线更新方案
+
+### G05 实施契约（REQ-20261116-09）
+
+- 用户已指定公开发行入口 crankfreedom/codex-dog/releases；本轮继续 G05，仅允许测试预发布与隔离安装验证，不发布 stable。
+- 固定 electron-builder 26.18.0 / electron-updater 6.8.11，使用稳定 v26 文档；不把 v27 未发行的签名清单能力当成已支持。
+- 两版测试版本为 0.5.0-beta.1/0.5.0-beta.2，独立测试 appId/安装目录/profile，模拟数据，不接真实 Codex。
+- 新增 updates.status/check/download/install，状态与检查为 read，下载及安装须明确 app.manage；公共参数不接受任意仓库、URL 或文件路径。
+- 更新候选绑定 candidateId、expectedVersion、文件哈希；下载与安装为持久操作，必须携带幂等键，安装还须 artifactId、expectedVersion 和 confirm=true。
+- 安装接受只表示已排队；稍后检查 CLI 文件占用、创建 SQLite 一致备份、持久记录待重启、关闭对外入口及 worker，最后执行 NSIS；重启后版本相符才完成。
+- 已启动的安装版 CLI/MCP 不强杀；文件占用时保留旧程序与数据，提示关闭后用新操作重试。安装器也检查 CLI 文件，阻断手动升级绕过。
+- 下载/哈希/网络/缺附件/版本变化/退出门禁失败不得提前运行安装器；退出失败不宣称安装成功；不自动降级或承诺整安装目录自动回滚。
+- GitHub 源固定 beta 测试通道；本机回环协议夹具只在明确标记的测试发行包启用，不作为真实 GitHub 证据；草稿与真实预发布、网络证据分开记录。
+- 未签名仅用于独立 G05 测试发行，HTTPS/哈希不能代替发布者签名；正式签名、Actions 发布环境和 G06 仍待验证。
 
 ### 边界与发布形式
 
@@ -21,7 +34,7 @@
 
 ### 更新源与安全
 
-用户于 2026-11-16 将发行平台改为 GitHub。当前采用 GitHub Releases 托管安装包和更新元数据，构建及草稿发布按 GitHub Actions 规划，不再以自有域名、对象存储或 GitHub Pages 为首版更新源。实际 owner/repository 尚未提供，文档使用 <owner>/<release-repo> 占位，不创建仓库或工作流。
+用户于 2026-11-16 将发行平台改为 GitHub，随后指定公开仓库 crankfreedom/codex-dog，当前源码与发行共用该仓库。GitHub Releases 托管安装包和更新元数据；G05 本机构建并通过已登录的 GitHub CLI 验证仓库管理权限。GitHub Actions 构建与草稿发布仍属规划，尚未创建工作流；不再以自有域名、对象存储或 GitHub Pages 为首版更新源。
 
 - 发布提供者采用 electron-builder 的 github provider，配置 owner、repo 及明确的发布策略；客户端只连接产品配置的发行仓库，不接收助手任意指定的下载 URL。
 - 面向分发建议使用公开发行仓库，使客户端无需 GitHub 登录即可读取更新；源码仓库是否公开与发行仓库可分开决定。私有发行仓库需要额外认证设计，当前不以客户端内置 PAT 作为方案。
@@ -34,7 +47,7 @@
 - GitHub 无法访问、限流或附件缺失时，返回可重试的更新错误并退避，不影响现有监控；不自动切换到未经批准的镜像。
 - 数据库升级前做一致性备份，旧程序拒绝高版本库；安装前处理命令行文件占用及所有进程释放，安装后重新核对未决业务状态。自动回滚不作首版承诺。
 
-依据：[electron-builder 更新流程](https://www.electron.build/v26/docs/features/auto-update/)、[GitHub 发布提供者](https://www.electron.build/v26/docs/publish/)、[GitHub Release 管理](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)、[Actions token 与最小权限](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token)。这些文档用于核对可选机制，实际工具版本仍由阶段 1 实测锁定。
+依据：[electron-builder 更新流程](https://www.electron.build/v26/docs/features/auto-update/)、[GitHub 发布提供者](https://www.electron.build/v26/docs/publish/)、[GitHub Release 管理](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)、[Actions token 与最小权限](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token)。当前 G05 工具版本已锁定，签名与 Actions 仍需后续实测。
 
 ### macOS 扩展边界
 

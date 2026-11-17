@@ -67,7 +67,7 @@ try {
   const unknownTarget = await cli(['threads', 'get', '--input', '-'], { ...params, threadId: randomUUID() }); assert.equal(unknownTarget.code, 5); assert.equal(unknownTarget.value.error.code, 'PROVIDER_UNAVAILABLE');
   mark('失效连接引用和真实不存在会话均明确失败，不返回空数据冒充读取成功');
   assert.equal((await ipc('threads.send', { threadId: target, prompt: 'never-dispatched' })).error.code, 'CAPABILITY_UNSUPPORTED');
-  const tools = (await client.listTools()).tools; assert.equal(tools.length, 15); assert(!tools.some(t => /send|consume|reset/i.test(t.name)));
+  const tools = (await client.listTools()).tools; assert.equal(tools.length, 19); assert(!tools.some(t => /send|consume|reset/i.test(t.name)));
   connection = good(await ipc('connections.get')); const calls = connection.readCalls;
   assert(Object.keys(calls).every(k => ['get_usage_limits', 'list_threads', 'read_thread'].includes(k))); assert(calls.get_usage_limits > 0 && calls.list_threads > 0 && calls.read_thread > 0);
   mark('公开目录不含发送/卡消费，传输调用审计仅出现三项只读工具');

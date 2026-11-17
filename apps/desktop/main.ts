@@ -1,10 +1,12 @@
 import { app, BrowserWindow, ipcMain, utilityProcess } from 'electron';
 import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { writeFile, rename, readFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
-import { apiVersion, failure, wireSchema } from '../../packages/contracts/protocol.ts';
+import { apiVersion, failure, wireSchema, version } from '../../packages/contracts/protocol.ts';
 import { locations } from '../../packages/infrastructure/local-transport.ts';
 import { SecurePipeHost } from '../../packages/infrastructure/secure-pipe.ts';
 import { FileAccessStore } from '../../packages/infrastructure/access-store.ts';
@@ -12,12 +14,18 @@ import { AccessService } from '../../packages/modules/access/service.ts';
 import { WorkerSupervisor } from '../../packages/app/worker-supervisor.ts';
 import { HostRouter } from '../../packages/app/router.ts';
 import { seal, unseal, packetIv } from '../../packages/infrastructure/channel.ts';
+import { UpdateService } from '../../packages/update/service.ts';
+import { UpdateError } from '../../packages/update/ports.ts';
+import { WindowsUpdateBackend } from '../../packages/infrastructure/windows-update-backend.ts';
+import { FileUpdateStore } from '../../packages/infrastructure/update-store.ts';
 
 const argument = (name: string, fallback: string) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
-const profile = argument('profile', 'g02');
+const distribution = app.isPackaged ? z.object({ kind: z.literal('g05-test'), profile: z.string().regex(/^g05-install-[a-z0-9-]+$/), repository: z.literal('crankfreedom/codex-dog') }).strict().parse(JSON.parse(readFileSync(join(process.resourcesPath, 'g05-distribution.json'), 'utf8'))) : undefined;
+const profile = argument('profile', distribution?.profile ?? 'g02');
 const scenario = argument('fixture', 'available');
 const sourceMode = argument('source', 'fixture');
 if (sourceMode !== 'fixture' && sourceMode !== 'live-readonly') throw new Error('来源模式无效');
+if (distribution && sourceMode !== 'fixture') throw new Error('G05 安装验证包仅允许模拟来源');
 const testHooks = sourceMode === 'fixture' && process.argv.includes('--g02-test-hooks');
 if (!['available', 'blocked', 'unknown'].includes(scenario)) throw new Error('模拟场景无效');
 const paths = locations(profile);
@@ -39,8 +47,29 @@ const runtime = new WorkerSupervisor({ now: () => performance.now(), newId: rand
   child.stderr?.on('data', () => console.error('业务进程报告错误，请查看诊断状态'));
   return { get pid() { return child.pid; }, send: value => child.postMessage(value), kill: () => { child.kill(); }, onMessage: listener => { child.on('message', listener); }, onExit: listener => { child.once('exit', listener); } };
 } });
-const router = new HostRouter(access, runtime, { runtimeId: instanceId, handlerInstanceId: randomUUID() }, sourceMode);
-const pipe = new SecurePipeHost({ script: join(__dirname, 'windows-pipe.ps1'), pipe: paths.pipe, directory: paths.directory, failed: () => { if (!stopping) app.quit(); },
+const updateBackend = new WindowsUpdateBackend({ packaged: app.isPackaged, testDistribution: !!distribution, executable: process.execPath, directory: paths.directory, ...(process.argv.some(a => a.startsWith('--g05-fixture-port=')) ? { fixturePort: Number(argument('g05-fixture-port', '0')) } : {}) });
+const updates = new UpdateService({ backend: updateBackend, store: new FileUpdateStore(join(paths.directory, 'updates.json')), version: app.isPackaged ? app.getVersion() : version, now: Date.now, newId: randomUUID,
+  digest: value => createHash('sha256').update(value).digest('hex'), lifecycle: {
+    prepare: async installId => {
+      await assertCliFree();
+      const result = await runtime.invoke({ apiVersion, requestId: randomUUID(), operation: 'system.prepare-update', params: { installId } });
+      if (!result.ok) throw new UpdateError('STORAGE_FAILURE', '安装前备份失败');
+      await assertCliFree();
+    },
+    install: async (artifact, finalGuard) => {
+      const owned = [runtime.health().workerPid, pipe.processId()].filter((pid): pid is number => typeof pid === 'number');
+      await stop(true);
+      try {
+        const deadline = performance.now() + 3000;
+        const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; } };
+        while (owned.some(alive)) { if (performance.now() > deadline) throw new UpdateError('UPDATE_EXIT_FAILED', '自建子进程未完全退出，拒绝安装'); await new Promise(resolve => setTimeout(resolve, 50)); }
+        await updateBackend.launchInstaller(artifact, finalGuard); exitAllowed = true; app.exit(0);
+      }
+      catch (error) { app.relaunch({ args: process.argv.slice(1) }); exitAllowed = true; app.exit(1); throw error; }
+    },
+  } });
+const router = new HostRouter(access, runtime, { runtimeId: instanceId, handlerInstanceId: randomUUID() }, sourceMode, updates);
+const pipe = new SecurePipeHost({ script: app.isPackaged ? join(process.resourcesPath, 'app.asar.unpacked/out/windows-pipe.ps1') : join(__dirname, 'windows-pipe.ps1'), pipe: paths.pipe, directory: paths.directory, failed: () => { if (!stopping) app.quit(); },
   request: async (raw, peerSid) => {
     if (peerSid !== ownerSid) return failure('PERMISSION_DENIED', 'Windows 客户端身份不匹配');
     const iv = packetIv(raw); if (!iv) return failure('INVALID_ARGUMENT', '传输封装无效');
@@ -65,6 +94,7 @@ async function start() {
   if (stopping) throw new Error('启动已取消');
   await runtime.start();
   if (stopping) throw new Error('启动已取消');
+  updateBackend.start(); await updates.start();
   initialized = true;
   await writeFile(paths.descriptor + '.tmp', JSON.stringify({ apiVersion, pipe: paths.pipe, appPid: process.pid, instanceId, ownerSid, brokerPid: identity.pid, transportKey }), { mode: 0o600 });
   await rename(paths.descriptor + '.tmp', paths.descriptor);
@@ -84,9 +114,24 @@ async function start() {
   });
   await window.loadFile(join(__dirname, 'renderer/index.html'));
 }
-async function stop() {
+async function assertCliFree() {
+  if (!distribution) throw new UpdateError('UPDATE_UNSUPPORTED', '未安装 G05 测试包');
+  const executable = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const free = await new Promise<boolean>(resolve => {
+      const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', join(process.resourcesPath, 'cli-file-guard.ps1'), '-CliPath', join(process.resourcesPath, 'cli/codex-dog.exe')], { windowsHide: true, stdio: 'ignore' });
+      const timer = setTimeout(() => { child.kill(); resolve(false); }, 3000);
+      child.once('error', () => { clearTimeout(timer); resolve(false); }); child.once('exit', code => { clearTimeout(timer); resolve(code === 0); });
+    });
+    if (free) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new UpdateError('CLI_IN_USE', '请先关闭安装目录中的 CLI/MCP，再重新申请安装；未终止占用者');
+}
+async function stop(forUpdate = false) {
   stopping = true; router.stop();
   await startupTask?.catch(() => {});
+  if (!forUpdate) await updates.close();
   try { const endpoint = JSON.parse(await readFile(paths.descriptor, 'utf8')); if (endpoint.instanceId === instanceId) await unlink(paths.descriptor); } catch { /* 只清理本实例端点。 */ }
   await pipe.stop(); await runtime.stop(); await access.close();
 }

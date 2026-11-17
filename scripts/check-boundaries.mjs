@@ -4,7 +4,8 @@ import { readFile, readdir } from 'node:fs/promises';
 const metas = {};
 for (const name of ['cli', 'main', 'worker', 'preload']) metas[name] = JSON.parse(await readFile(`out/${name}.meta.json`, 'utf8'));
 const cliInputs = Object.keys(metas.cli.inputs);
-assert(!cliInputs.some(path => /packages\/(app|modules)\/|fixture-usage|apps\/desktop/.test(path)), 'CLI 不得打包业务实现或模拟数据源');
+assert(!cliInputs.some(path => /packages\/(app|modules|update)\/|fixture-usage|apps\/desktop/.test(path)), 'CLI 不得打包业务实现或模拟数据源');
+assert(!cliInputs.some(path => /windows-update-backend|update-store|electron-updater/.test(path)), 'CLI/MCP 不得持有更新器或安装缓存');
 assert(Object.keys(metas.worker.inputs).some(path => path.endsWith('packages/app/registry.ts')));
 assert(!Object.keys(metas.main.inputs).some(path => /modules\/quota|fixture-usage/.test(path)), '主进程不能复制额度业务');
 assert(!cliInputs.some(path => /sqlite-store|target-lease|persisted-usage/.test(path)), 'CLI 不能持有数据库或目标租约');
@@ -21,7 +22,7 @@ async function scan(directory) {
       if (!file.endsWith('codex-desktop-readonly.ts')) assert(!/codex-app-tools-/.test(text), `${file} 只有只读适配器可连接桌面管道`);
       if (!file.endsWith('codex-goal-readonly.ts')) assert(!/goals_1\.sqlite/.test(text), `${file} 只有 Goal 只读适配器可定位源库`);
       if (file.endsWith('codex-desktop-readonly.ts')) assert(!/send_message|consume|resetCredit|app-server/.test(text), '桌面只读适配不得包含发送/消费/独立 App Server');
-      if (file.startsWith('packages/modules/')) assert(!/from ['"](?:node:|electron|.*infrastructure|.*apps\/)/.test(text), `${file} 模块不得依赖基础设施`);
+      if (file.startsWith('packages/modules/') || file.startsWith('packages/update/')) assert(!/from ['"](?:node:|electron|.*infrastructure|.*apps\/)/.test(text), `${file} 模块不得依赖基础设施`);
       if (file.startsWith('apps/desktop/renderer/') || file.endsWith('/preload.ts')) assert(!/child_process|spawn\(|exec\(/.test(text), `${file} 界面不能执行 CLI`);
     }
   }

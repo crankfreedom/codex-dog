@@ -13,7 +13,7 @@
 
 ## 公共操作与 CLI 命令目录
 
-权限列 read 为普通业务读取；正文需要额外 content.read；“原权限”指操作所有者加原操作所需权限。access.request 是当前用户身份校验后的首次配对例外，不直接获得业务权限。本表保留最终计划签名，当前只实现 G04 列明的 15 项能力；其余不可执行。当前 access.grant 的具体 code/scopes/expectedRevision 等参数以运行契约及 G02 配对手册为准。
+权限列 read 为普通业务读取；正文需要额外 content.read；“原权限”指操作所有者加原操作所需权限。access.request 是当前用户身份校验后的首次配对例外，不直接获得业务权限。本表保留最终计划签名，当前实现 G04 的 15 项及 [G05](g05.md) 的 updates.status/check/download/install，共 19 项；其余不可执行。更新命令的 candidateId/artifactId/expectedVersion/confirm 及幂等键以 G05 实施契约为准。当前 access.grant 的具体 code/scopes/expectedRevision 等参数以运行契约及 G02 配对手册为准。
 
 | 编号 | 公共 operation | CLI 子命令 | 处理模块 | 权限 | 参数要点 → 结果 |
 |---|---|---|---|---|---|

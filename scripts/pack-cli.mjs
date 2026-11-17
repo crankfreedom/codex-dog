@@ -9,7 +9,7 @@ if (!stage) throw new Error('缺少验证阶段标识');
 await mkdir(`release/${stage}`, { recursive: true });
 const config = {
   main: resolve('out/cli.cjs'), mainFormat: 'commonjs', executable: process.execPath,
-  output: resolve(`release/${stage}/codex-dog.exe`), disableExperimentalSEAWarning: true,
+  output: resolve(process.env.DOG_CLI_OUTPUT ?? `release/${stage}/codex-dog.exe`), disableExperimentalSEAWarning: true,
   useSnapshot: false, useCodeCache: false, execArgvExtension: 'none',
 };
 await writeFile('out/sea-config.json', JSON.stringify(config, null, 2));

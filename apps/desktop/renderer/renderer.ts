@@ -25,6 +25,9 @@ function card(record: Client) {
   const adminLabel = document.createElement('label');
   const admin = document.createElement('input'); admin.type = 'checkbox'; admin.setAttribute('aria-label', '允许管理客户端授权');
   adminLabel.append(admin, document.createTextNode('允许管理客户端授权'));
+  const appLabel = document.createElement('label'); appLabel.className = 'app-permission';
+  const appManage = document.createElement('input'); appManage.type = 'checkbox'; appManage.setAttribute('aria-label', '允许下载和安装更新');
+  appLabel.append(appManage, document.createTextNode('允许下载和安装更新'));
   const grant = document.createElement('button'); grant.textContent = '批准读取'; grant.className = 'grant';
   const revoke = document.createElement('button'); revoke.textContent = '撤销授权'; revoke.className = 'revoke';
   const message = document.createElement('p'); message.className = 'action-result'; message.setAttribute('role', 'status');
@@ -32,7 +35,7 @@ function card(record: Client) {
     grant.disabled = true; revoke.disabled = true;
     try {
       const record = current.get(element.dataset.clientId!)!;
-      const params = operation === 'access.grant' ? { id: record.id, expectedRevision: record.revision, code: code.value.trim().toUpperCase(), scopes: admin.checked ? ['read', 'access.manage'] : ['read'], expiresAt: null } : { id: record.id, expectedRevision: record.revision };
+      const params = operation === 'access.grant' ? { id: record.id, expectedRevision: record.revision, code: code.value.trim().toUpperCase(), scopes: ['read', ...(admin.checked ? ['access.manage'] : []), ...(appManage.checked ? ['app.manage'] : [])], expiresAt: null } : { id: record.id, expectedRevision: record.revision };
       const result = await window.codexDog.request(operation, params, crypto.randomUUID());
       message.textContent = result.ok ? '已保存' : `${result.error.code}：${result.error.message}`;
       await refreshClients();
@@ -40,7 +43,7 @@ function card(record: Client) {
   }
   grant.addEventListener('click', () => void act('access.grant'));
   revoke.addEventListener('click', () => void act('access.revoke'));
-  element.append(label, status, code, adminLabel, grant, revoke, message);
+  element.append(label, status, code, adminLabel, appLabel, grant, revoke, message);
   return element;
 }
 async function refreshClients() {
@@ -54,6 +57,7 @@ async function refreshClients() {
     (element.querySelector('.grant') as HTMLElement).hidden = record.status !== 'pending';
     (element.querySelector('input[aria-label="配对码"]') as HTMLElement).hidden = record.status !== 'pending';
     (element.querySelector('label') as HTMLElement).hidden = record.status !== 'pending' || !record.requestedScopes.includes('access.manage');
+    (element.querySelector('.app-permission') as HTMLElement).hidden = record.status !== 'pending' || !record.requestedScopes.includes('app.manage');
     (element.querySelector('.revoke') as HTMLElement).hidden = record.status === 'revoked';
   }
   if (!records.length) clients.textContent = '暂无申请。请从 CLI 或 MCP 发起 access request。';

@@ -43,6 +43,16 @@ parent.on('message', event => {
   if (hooks && message.type === 'test:exit') process.exit(23);
   if (message.type === 'invoke' && !blocked) {
     const testRequest = requestSchema.safeParse(message.request);
+    if (testRequest.success && testRequest.data.operation === 'system.prepare-update') {
+      const installId = testRequest.data.params.installId;
+      let result;
+      try {
+        if (typeof installId !== 'string' || !/^[a-f0-9-]{36}$/i.test(installId)) throw new Error('更新操作标识无效');
+        store.backup(join(directory, 'update-backups', installId + '.sqlite'));
+        result = { ok: true, data: { backedUp: true }, meta: { apiVersion, requestId: testRequest.data.requestId, source: 'local', ...identity } };
+      } catch { result = failure('STORAGE_FAILURE', '安装前一致备份失败', testRequest.data.requestId); }
+      parent.postMessage({ id: message.id, result }); return;
+    }
     if (hooks && testRequest.success && testRequest.data.operation === 'g03.test') {
       let result;
       try { result = { ok: true, data: probe!.execute(testRequest.data.params), meta: { apiVersion, requestId: testRequest.data.requestId, source: 'fixture', ...identity } }; }

@@ -10,6 +10,7 @@ export class SecurePipeHost {
   private stopped = false;
   private options: { script: string; pipe: string; directory: string; request: (raw: unknown, peerSid: string) => Promise<unknown>; failed: () => void };
   constructor(options: SecurePipeHost['options']) { this.options = options; }
+  processId() { return this.child?.pid; }
   async start(): Promise<PipeIdentity> {
     if (process.platform !== 'win32') throw new Error('G02 本机身份适配目前仅支持 Windows');
     const child = spawn(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
