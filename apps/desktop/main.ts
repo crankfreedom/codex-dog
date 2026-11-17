@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, utilityProcess } from 'electron';
+import { app, BrowserWindow, ipcMain, utilityProcess, Tray, Menu, nativeImage } from 'electron';
 import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { writeFile, rename, readFile, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -21,6 +21,8 @@ import { FileUpdateStore } from '../../packages/infrastructure/update-store.ts';
 import { parseDistribution } from '../../packages/infrastructure/distribution.ts';
 import { formatStartupDiagnostic } from '../../packages/infrastructure/startup-diagnostics.ts';
 import { windowsPowerShellEnvironment } from '../../packages/infrastructure/windows-powershell.ts';
+import { SourceConfiguration } from '../../packages/app/source-configuration.ts';
+import { FileSourceStore } from '../../packages/infrastructure/source-store.ts';
 
 const argument = (name: string, fallback: string) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
 let startupStage = 'bootstrap';
@@ -29,9 +31,9 @@ const distributionFile = app.isPackaged ? join(process.resourcesPath, existsSync
 const distribution = distributionFile ? parseDistribution(JSON.parse(readFileSync(distributionFile, 'utf8'))) : undefined;
 const profile = argument('profile', distribution?.profile ?? 'g02');
 const scenario = argument('fixture', 'available');
-const sourceMode = argument('source', 'fixture');
+let sourceMode = argument('source', 'fixture') as 'fixture' | 'live-readonly';
 if (sourceMode !== 'fixture' && sourceMode !== 'live-readonly') throw new Error('来源模式无效');
-if (distribution && sourceMode !== 'fixture') throw new Error('当前安装发行包仅允许模拟来源');
+if (distribution?.kind === 'g05-test' && sourceMode !== 'fixture') throw new Error('历史 G05 安装包仅允许模拟来源');
 if (process.argv.some(a => a.startsWith('--g05-fixture-port=')) && distribution?.kind !== 'g05-test') throw new Error('非 G05 测试包不接受回环更新源');
 const testHooks = sourceMode === 'fixture' && process.argv.includes('--g02-test-hooks');
 if (!['available', 'blocked', 'unknown'].includes(scenario)) throw new Error('模拟场景无效');
@@ -46,11 +48,16 @@ let startupTask: Promise<void> | undefined;
 let exitAllowed = false;
 let stopTask: Promise<void> | undefined;
 let window: BrowserWindow | undefined;
+let tray: Tray | undefined;
+let quitTimer: NodeJS.Timeout | undefined;
+const configuration = new SourceConfiguration(new FileSourceStore(join(paths.directory, 'source.json')));
+let selection = { source: sourceMode, callerThreadId: argument('codex-caller-thread', process.env.CODEX_THREAD_ID ?? ''), pipe: argument('codex-pipe', '') };
+function showWindow() { if (stopping || !window || window.isDestroyed()) return; if (window.isMinimized()) window.restore(); window.show(); window.focus(); }
 const access = new AccessService({ store: new FileAccessStore(join(paths.directory, 'access.json')), now: () => Date.now(), newCode: () => randomBytes(3).toString('hex').toUpperCase(),
   digest: value => createHash('sha256').update(value).digest('hex'), equal: (a, b) => { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); } });
-const runtime = new WorkerSupervisor({ now: () => performance.now(), newId: randomUUID, requestTimeout: sourceMode === 'live-readonly' ? 30000 : 5000, startupTimeout: sourceMode === 'live-readonly' ? 15000 : 5000, spawn: () => {
-  const child = utilityProcess.fork(join(__dirname, 'worker.cjs'), [], { serviceName: 'Codex Dog fixture worker', stdio: 'pipe', env: { ...process.env, CODEX_DOG_FIXTURE: scenario,
-    CODEX_DOG_PARENT_PID: String(process.pid), CODEX_DOG_SOURCE: sourceMode, CODEX_DOG_CODEX_PIPE: argument('codex-pipe', ''), CODEX_DOG_CALLER: argument('codex-caller-thread', process.env.CODEX_THREAD_ID ?? ''), CODEX_DOG_CODEX_HOME: argument('codex-home', process.env.CODEX_HOME ?? ''), CODEX_DOG_DATA_DIRECTORY: paths.directory, CODEX_DOG_TEST_HOOKS: testHooks ? '1' : '0', CODEX_DOG_TEST_DELAY_MS: testHooks ? argument('test-delay-ms', '0') : '0' } });
+const runtime = new WorkerSupervisor({ now: () => performance.now(), newId: randomUUID, requestTimeout: 45000, startupTimeout: 45000, spawn: () => {
+  const child = utilityProcess.fork(join(__dirname, 'worker.cjs'), [], { serviceName: 'Codex Dog business worker', stdio: 'pipe', env: { ...process.env, CODEX_DOG_FIXTURE: scenario,
+    CODEX_DOG_PARENT_PID: String(process.pid), CODEX_DOG_SOURCE: sourceMode, CODEX_DOG_CODEX_PIPE: selection.pipe, CODEX_DOG_CALLER: selection.callerThreadId, CODEX_DOG_CODEX_HOME: argument('codex-home', process.env.CODEX_HOME ?? ''), CODEX_DOG_DATA_DIRECTORY: paths.directory, CODEX_DOG_TEST_HOOKS: testHooks ? '1' : '0', CODEX_DOG_TEST_DELAY_MS: testHooks ? argument('test-delay-ms', '0') : '0' } });
   child.stderr?.on('data', () => console.error('业务进程报告错误，请查看诊断状态'));
   return { get pid() { return child.pid; }, send: value => child.postMessage(value), kill: () => { child.kill(); }, onMessage: listener => { child.on('message', listener); }, onExit: listener => { child.once('exit', listener); } };
 } });
@@ -75,7 +82,9 @@ const updates = new UpdateService({ backend: updateBackend, store: new FileUpdat
       catch (error) { app.relaunch({ args: process.argv.slice(1) }); exitAllowed = true; app.exit(1); throw error; }
     },
   } });
-const router = new HostRouter(access, runtime, { runtimeId: instanceId, handlerInstanceId: randomUUID() }, sourceMode, updates);
+const router = new HostRouter(access, runtime, { runtimeId: instanceId, handlerInstanceId: randomUUID() }, sourceMode, updates, { configuration, desktop: {
+  show: showWindow, quit: finalGuard => { quitTimer ??= setTimeout(() => { quitTimer = undefined; try { finalGuard(); app.quit(); } catch { /* 派发前授权已撤销，取消退出。 */ } }, 400); }, status: () => ({ windowVisible: window?.isVisible() ?? false, trayAvailable: !!tray && !tray.isDestroyed() }),
+} });
 const pipe = new SecurePipeHost({ script: app.isPackaged ? join(process.resourcesPath, 'app.asar.unpacked/out/windows-pipe.ps1') : join(__dirname, 'windows-pipe.ps1'), pipe: paths.pipe, directory: paths.directory, failed: () => { if (!stopping) app.quit(); },
   request: async (raw, peerSid) => {
     if (peerSid !== ownerSid) return failure('PERMISSION_DENIED', 'Windows 客户端身份不匹配');
@@ -99,6 +108,13 @@ async function start() {
   if (!identity.rootProtected || identity.pipeAclVerified !== true || identity.rootAclVerified !== true) throw Object.assign(new Error('Windows ACL 校验失败'), { code: 'PIPE_ACL_INVALID' });
   if (stopping) throw new Error('启动已取消');
   startupPhase('access'); await access.start();
+  selection = await configuration.start({
+    ...(process.argv.some(a => a.startsWith('--source=')) || distribution?.kind === 'g05-test' ? { source: sourceMode } : {}),
+    ...(process.argv.some(a => a.startsWith('--codex-pipe=')) ? { pipe: argument('codex-pipe', '') } : {}),
+    ...(process.argv.some(a => a.startsWith('--codex-caller-thread=')) ? { callerThreadId: argument('codex-caller-thread', '') } : {}),
+  }, process.env.CODEX_THREAD_ID ?? '');
+  sourceMode = selection.source; router.setStartupMode(sourceMode);
+  if (testHooks && sourceMode !== 'fixture') throw new Error('测试 bridge 只允许模拟模式');
   if (stopping) throw new Error('启动已取消');
   startupPhase('worker'); await runtime.start();
   if (stopping) throw new Error('启动已取消');
@@ -108,7 +124,8 @@ async function start() {
   await rename(paths.descriptor + '.tmp', paths.descriptor);
   if (stopping) throw new Error('启动已取消');
   startupPhase('window');
-  window = new BrowserWindow({ width: 900, height: 750, title: 'Codex Dog · G04 只读验证', webPreferences: { preload: join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, additionalArguments: testHooks ? ['--g03-test-hooks'] : [] } });
+  window = new BrowserWindow({ width: 1140, height: 800, minWidth: 840, minHeight: 620, backgroundColor: '#f5f7fa', title: 'Codex Dog · 守码犬', autoHideMenuBar: true, webPreferences: { preload: join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, additionalArguments: testHooks ? ['--g03-test-hooks'] : [] } });
+  window.on('close', event => { if (!stopping && !exitAllowed && tray && !tray.isDestroyed()) { event.preventDefault(); window?.hide(); } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' })); window.webContents.on('will-navigate', event => event.preventDefault());
   const inputSchema = z.object({ operation: z.string(), params: z.record(z.string(), z.unknown()), idempotencyKey: z.string().min(1).max(100).optional() }).strict();
   ipcMain.handle('dog:request', (event, raw: unknown) => {
@@ -122,6 +139,15 @@ async function start() {
     return runtime.invoke({ apiVersion, requestId: randomUUID(), operation: 'g03.test', params });
   });
   await window.loadFile(join(__dirname, 'renderer/index.html'));
+  const pixels = Buffer.alloc(20 * 20 * 4);
+  for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+    const inside = (x - 10) ** 2 + (y - 10) ** 2 < 90; const eye = y >= 7 && y <= 9 && (x >= 5 && x <= 7 || x >= 12 && x <= 14); const nose = y >= 12 && y <= 14 && x >= 8 && x <= 11;
+    const i = (y * 20 + x) * 4; pixels[i] = eye || nose ? 255 : 25; pixels[i + 1] = eye || nose ? 255 : 112; pixels[i + 2] = eye || nose ? 255 : 98; pixels[i + 3] = inside ? 255 : 0;
+  }
+  tray = new Tray(nativeImage.createFromBitmap(pixels, { width: 20, height: 20 }));
+  tray.setToolTip('Codex Dog · 关闭窗口后继续运行');
+  tray.setContextMenu(Menu.buildFromTemplate([{ label: '打开 Codex Dog', click: showWindow }, { type: 'separator' }, { label: '退出并停止监控', click: () => app.quit() }]));
+  tray.on('double-click', showWindow); tray.on('click', showWindow);
 }
 async function assertCliFree() {
   if (!distribution) throw new UpdateError('UPDATE_UNSUPPORTED', '未安装 G05 测试包');
@@ -139,15 +165,19 @@ async function assertCliFree() {
 }
 async function stop(forUpdate = false) {
   stopping = true; router.stop();
+  clearTimeout(quitTimer);
   await startupTask?.catch(() => {});
-  if (!forUpdate) await updates.close();
-  try { const endpoint = JSON.parse(await readFile(paths.descriptor, 'utf8')); if (endpoint.instanceId === instanceId) await unlink(paths.descriptor); } catch { /* 只清理本实例端点。 */ }
-  await pipe.stop(); await runtime.stop(); await access.close();
+  try { if (!forUpdate) await updates.close(); }
+  finally {
+    try { const endpoint = JSON.parse(await readFile(paths.descriptor, 'utf8')); if (endpoint.instanceId === instanceId) await unlink(paths.descriptor); } catch { /* 只清理本实例端点。 */ }
+    try { await pipe.stop(); } finally { try { await runtime.stop(); } finally { await configuration.close(); await access.close(); tray?.destroy(); tray = undefined; } }
+  }
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', () => { window?.show(); window?.focus(); });
-  app.on('window-all-closed', () => app.quit());
+  app.on('second-instance', showWindow);
+  app.on('activate', showWindow);
+  app.on('window-all-closed', () => { if (!tray) app.quit(); });
   app.on('before-quit', event => {
     if (exitAllowed) return;
     event.preventDefault();

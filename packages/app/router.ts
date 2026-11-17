@@ -4,6 +4,9 @@ import { UpdateService } from '../update/service.ts';
 import { UpdateError } from '../update/ports.ts';
 import { AccessError, AccessService } from '../modules/access/service.ts';
 import type { Principal } from '../modules/access/service.ts';
+import { ConfigurationError, SourceConfiguration } from './source-configuration.ts';
+
+export interface DesktopPort { show(): void; quit(finalGuard: () => void): void; status(): Record<string, unknown> }
 
 export interface HostRuntime { invoke(request: Request): Promise<Response>; health(): Record<string, unknown> }
 export class HostRouter {
@@ -13,7 +16,11 @@ export class HostRouter {
   private stopping = false;
   private mode: 'fixture' | 'live-readonly';
   private updates?: UpdateService;
-  constructor(access: AccessService, runtime: HostRuntime, identity: HostRouter['identity'], mode: 'fixture' | 'live-readonly' = 'fixture', updates?: UpdateService) { this.access = access; this.runtime = runtime; this.identity = identity; this.mode = mode; this.updates = updates; }
+  private desktop?: DesktopPort;
+  private configuration?: SourceConfiguration;
+  private quitKeys = new Map<string, string>();
+  constructor(access: AccessService, runtime: HostRuntime, identity: HostRouter['identity'], mode: 'fixture' | 'live-readonly' = 'fixture', updates?: UpdateService, platform?: { desktop: DesktopPort; configuration: SourceConfiguration }) { this.access = access; this.runtime = runtime; this.identity = identity; this.mode = mode; this.updates = updates; this.desktop = platform?.desktop; this.configuration = platform?.configuration; }
+  setStartupMode(mode: 'fixture' | 'live-readonly') { this.mode = mode; }
   stop() { this.stopping = true; }
   private available(name: string) { return !(this.mode === 'fixture' && liveOperations.has(name)) && !(name.startsWith('updates.') && name !== 'updates.status' && !this.updates?.status().supported); }
   async invoke(raw: unknown, context: { trustedDesktop: true } | { credential?: Credential }): Promise<Response> {
@@ -39,7 +46,19 @@ export class HostRouter {
           if (this.mode === 'fixture' && liveOperations.has(request.operation)) return failure('PROVIDER_UNAVAILABLE', '该读取要求显式启动 live-readonly 模式', request.requestId);
           const result = await this.runtime.invoke(request); this.access.assertCurrent(actor, 'read'); return result;
         }
-        if (request.operation === 'app.status') data = { state: this.runtime.health().state, mode: this.mode, realCodexConnected: this.mode === 'live-readonly' && (this.runtime.health().provider as { state?: string } | undefined)?.state === 'ready', ...this.runtime.health() };
+        if (request.operation === 'connections.configuration') { if (!this.configuration) return failure('CAPABILITY_UNSUPPORTED', '来源配置未组装', requestId); data = this.configuration.get(); }
+        else if (request.operation === 'connections.configure') { if (!this.configuration) return failure('CAPABILITY_UNSUPPORTED', '来源配置未组装', requestId); data = await this.configuration.configure(params.data, actor.clientId, request.idempotencyKey, () => { if (this.stopping) throw new ConfigurationError('APP_STOPPING', '应用正在退出'); this.access.assertCurrent(actor, 'app.manage'); }); }
+        else if (request.operation === 'desktop.show') { if (!this.desktop) return failure('CAPABILITY_UNSUPPORTED', '桌面未组装', requestId); this.desktop.show(); data = { shown: true }; }
+        else if (request.operation === 'app.quit') {
+          if (!this.desktop) return failure('CAPABILITY_UNSUPPORTED', '桌面未组装', requestId);
+          if (!request.idempotencyKey) return failure('INVALID_ARGUMENT', '退出必须携带幂等键', requestId);
+          if ((params.data as { expectedInstanceId: string }).expectedInstanceId !== this.identity.runtimeId) return failure('REVISION_CONFLICT', '应用实例已变化', requestId);
+          const key = actor.clientId + ':' + request.idempotencyKey; const body = JSON.stringify(params.data);
+          if (this.quitKeys.has(key) && this.quitKeys.get(key) !== body) return failure('IDEMPOTENCY_CONFLICT', '同键退出参数不一致', requestId);
+          if (!this.quitKeys.has(key)) { this.access.assertCurrent(actor, 'app.manage'); this.quitKeys.set(key, body); this.desktop.quit(() => this.access.assertCurrent(actor, 'app.manage')); }
+          data = { accepted: true, instanceId: this.identity.runtimeId };
+        }
+        else if (request.operation === 'app.status') data = { state: this.runtime.health().state, mode: this.mode, instanceId: this.identity.runtimeId, ...this.desktop?.status(), realCodexConnected: this.mode === 'live-readonly' && (this.runtime.health().provider as { state?: string } | undefined)?.state === 'ready', ...this.runtime.health() };
         else if (request.operation === 'app.version') data = { version, apiVersion };
         else if (request.operation === 'capabilities.list') data = { capabilities: definitions.map(d => ({ ...describe(d.operation), available: this.available(d.operation), allowed: actor.scopes.includes(d.scope as 'read' | 'access.manage' | 'app.manage') })) };
         else if (request.operation === 'capabilities.describe') { const name = String((params.data as { operation: string }).operation); data = describe(name) ? { ...describe(name), available: this.available(name) } : { available: false }; }
@@ -56,6 +75,6 @@ export class HostRouter {
         if (definition.readOnly) this.access.assertCurrent(actor, definition.scope);
       }
       return { ok: true, data, meta: { apiVersion, requestId: request.requestId, source: 'local', ...this.identity, workerPid: this.runtime.health().workerPid as number | null } };
-    } catch (error) { return failure(error instanceof AccessError || error instanceof UpdateError ? error.code : 'INTERNAL_ERROR', error instanceof AccessError || error instanceof UpdateError ? error.message : '请求处理失败', request.requestId); }
+    } catch (error) { return failure(error instanceof AccessError || error instanceof UpdateError || error instanceof ConfigurationError ? error.code : 'INTERNAL_ERROR', error instanceof AccessError || error instanceof UpdateError || error instanceof ConfigurationError ? error.message : '请求处理失败', request.requestId); }
   }
 }

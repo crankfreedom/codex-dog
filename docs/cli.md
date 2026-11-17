@@ -4,6 +4,10 @@
 
 ## 当前入口参数
 
+- 阶段 2 当前共 23 项：历史 19 项加 connections.configuration/configure、desktop.show、app.quit；三入口均由 definitions 声明生成/校验，当前签名优先于下方最终设计表。
+- connections configuration / desktop show 无参数、read；connections configure --input FILE|- 使用 expectedRevision/source/callerThreadId/pipe、app.manage 及幂等键，仅保存下次启动选择。
+- app quit --input FILE|- 使用 expectedInstanceId/confirm=true、app.manage 及幂等键；实例取自 app status。先应答再退出，实际派发前复核撤销；完全离线不拉起。
+- 对应 MCP 工具为 connections_configuration、connections_configure、desktop_show、app_quit，变更的 idempotencyKey 同样位于工具参数，不透传 Shell。详情见 [实施记录](stage2.md) 和 [契约](contracts.md)。
 - 默认 profile=g02；普通 CLI 使用 client=cli，MCP 使用 client=mcp，各自独立配对。
 - 全局选项：--profile、--client、--input FILE|-、--operation、--timeout-ms、--idempotency-key；--json 输出统一协议结果。
 - access.request 默认申请 read，自动生成稳定申请键；grant/revoke 必须显式带幂等键与 expectedRevision。
@@ -13,7 +17,7 @@
 
 ## 公共操作与 CLI 命令目录
 
-权限列 read 为普通业务读取；正文需要额外 content.read；“原权限”指操作所有者加原操作所需权限。access.request 是当前用户身份校验后的首次配对例外，不直接获得业务权限。本表保留最终计划签名，当前实现 G04 的 15 项及 [G05](g05.md) 的 updates.status/check/download/install，共 19 项；其余不可执行。更新命令的 candidateId/artifactId/expectedVersion/confirm 及幂等键以 G05 实施契约为准。当前 access.grant 的具体 code/scopes/expectedRevision 等参数以运行契约及 G02 配对手册为准。
+权限列 read 为普通业务读取；正文需要额外 content.read；“原权限”指操作所有者加原操作所需权限。access.request 是当前用户身份校验后的首次配对例外，不直接获得业务权限。本表保留最终计划签名，当前实际 23 项以上方入口及能力目录为准；其余不可执行。更新参数以 G05 实施契约为准，来源配置/退出以阶段 2 为准；access.grant 的 code/scopes/expectedRevision 见 G02。
 
 | 编号 | 公共 operation | CLI 子命令 | 处理模块 | 权限 | 参数要点 → 结果 |
 |---|---|---|---|---|---|

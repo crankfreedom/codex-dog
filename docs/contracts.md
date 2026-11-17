@@ -194,3 +194,16 @@ threads.send 仅为显式单次发送，要求目标空闲、无审批/未结束
 | 8 | CANCELLED_BEFORE_EFFECT | 已证实在副作用发生前取消；已发送消息或消费不能返回此结果 |
 
 历史 G01 API major=1、G02/G03 major=2；当前 G04 API major=3；operation 名称稳定，新增可选字段保持兼容，删除/重解释字段或枚举须升级 major。服务端以 1 MiB 请求、4 MiB 单响应为初始上限，超限要求分页或流式导出，帧处理与真实 Codex 适配的内部上限分别验证。默认不输出错误堆栈、凭据和原始工具响应。
+
+## 阶段 2 增补：只读桌面与来源配置
+
+本节优先于历史阶段的 19 项实现统计。新增四项能力，API major 3 与业务 Schema 2 不变；未实现设计项仍不可调用。
+
+- `connections.configuration`：read，空参数，返回启动时 `active`、已保存 `saved`、`revision`、`restartRequired`、`override`。
+- `connections.configure`：app.manage，`{expectedRevision, source: 'fixture'|'live-readonly', callerThreadId, pipe}`；callerThreadId 为 UUID 或空串，pipe 为本机 Codex 工具管道或空串；真实模式必须提供 callerThreadId。保存下次启动选择，当前进程不重连、不切换；显式启动参数优先，override 表示存在启动覆盖。须幂等键，以客户端、操作及键隔离，持久保存返回值；同键异参拒绝，修订冲突拒绝。配置文件损坏/高版本拒绝启动，保存失败不改内存。
+- `desktop.show`：read，空参数，仅显示本应用现有窗口，不执行 Shell、不拉起新应用。
+- `app.quit`：app.manage，`{expectedInstanceId, confirm:true}` 及幂等键，实例不符返回 REVISION_CONFLICT；应答后安排明确退出。同实例重复键不重复安排，异参拒绝；退出后离线，旧实例请求不能退出新实例。
+
+来源配置仅含选择参数，不含认证、聊天或额度观察。保存位于当前 SID 保护目录，与配对授权分开；保存前最终复核权限。配置和退出不触发真实业务。托盘关闭窗口仅隐藏，完全退出关闭端点、worker 和安全管道宿主。保存的 caller 优先于环境回退，只有未指定时才使用 CODEX_THREAD_ID；显式启动参数仍优先。
+
+新增操作沿用统一授权、离线/停止及存储错误。配置的主要错误为 INVALID_ARGUMENT、REVISION_CONFLICT、IDEMPOTENCY_CONFLICT、CLIENT_LIMIT、STORAGE_FAILURE；本机请求默认 30 秒客户端超时。退出应答为 accepted，不代表端点已关闭；400 ms 后派发前再次复核 app.manage，若撤销则取消。调用方可用 app.status/离线核对，不因读取失败自动拉起应用。来源配置幂等记录最多 2048 条、当前不自动清理；达到上限拒绝，不丢弃旧键。

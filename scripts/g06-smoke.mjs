@@ -22,7 +22,7 @@ try {
   const host = await launchSmokeHost({ executablePath: executable, env }, 'g06'); desktop = host.desktop; const page = host.page; page.on('pageerror', error => pageErrors.push(error.message)); await page.waitForFunction(() => document.getElementById('state')?.textContent?.includes('source=fixture'));
   const request = (operation, params = {}) => page.evaluate(({ operation, params }) => window.codexDog.request(operation, params), { operation, params });
   const version = await request('app.version'); assert.equal(version.data.version, pack.version); assert.equal((await command(cli, ['--version'])).stdout.trim(), pack.version); assert.equal((await request('app.status')).data.realCodexConnected, false);
-  mark('实际 per-user Preview NSIS 安装，主应用/worker/独立 CLI 版本一致，强制模拟数据');
+  mark('实际 per-user Preview NSIS 安装，主应用/worker/独立 CLI 版本一致，默认模拟数据');
   const manifest = JSON.parse(await readFile(join(directory, 'resources/dog-distribution.json'), 'utf8')); assert.equal(manifest.profile, pack.profile); assert.equal(manifest.kind, 'release-preview'); assert(pack.appId.endsWith('.preview'));
   const updates = await request('updates.status'); assert.equal(updates.data.supported, false); assert.equal(updates.data.unsignedTestDistribution, true); assert.equal((await request('updates.check')).error.code, 'UPDATE_UNSUPPORTED');
   await assert.rejects(access(join(pack.output, 'beta.yml'))); await assert.rejects(access(join(pack.output, 'latest.yml')));

@@ -69,6 +69,9 @@ jobs:
       - name: 验证预览安装版
         if: inputs.mode == 'preview'
         run: pnpm test:g06
+      - name: 验证阶段 2 安装版只读桌面和托盘
+        if: inputs.mode == 'preview'
+        run: pnpm test:stage2 --installed
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -80,5 +83,6 @@ jobs:
             artifacts/g06/preview-report.json
             artifacts/g06/startup-*.json
             artifacts/g06/windows-preflight.json
+            artifacts/stage2/**
           if-no-files-found: warn
           retention-days: 7

@@ -37,7 +37,7 @@ test('统一入口拒绝未知参数、权限缺失、未实现能力和协议�
   ] as const) { const result = registry.invoke(raw, scopes); assert(!result.ok); assert.equal(result.error.code, expected); }
 });
 test('能力发现只列已实现能力且使用同一输入 Schema', async () => {
-  assert.equal(definitions.length, 19); assert(!definitions.some(c => String(c.operation) === 'threads.send'));
+  assert.equal(definitions.length, 23); assert(!definitions.some(c => String(c.operation) === 'threads.send'));
   assert.equal(describe('quota.get')!.inputSchema.additionalProperties, false);
   assert.equal(describe('access.grant')!.readOnly, false);
 });

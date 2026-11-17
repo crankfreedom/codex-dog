@@ -12,5 +12,5 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node", "electron"]
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "test/**/*.ts"]
+  "include": ["apps/**/*.ts", "apps/**/*.vue", "packages/**/*.ts", "test/**/*.ts"]
 }

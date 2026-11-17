@@ -3,20 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'">
-  <title>Codex Dog · G04</title>
+  <title>Codex Dog · 守码犬</title>
+  <link rel="stylesheet" href="renderer.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main>
-    <p class="eyebrow">CODEX DOG · G04</p>
-    <h1>本机配对与进程验证</h1>
-    <p>默认使用模拟数据；显式 live-readonly 模式仅接入真实只读来源。外部客户端须先配对，默认只授予读取权限。</p>
-    <p id="health" role="status">正在检查业务进程…</p>
-    <section aria-labelledby="access-title"><h2 id="access-title">本机客户端</h2><p>核对命令行显示的客户端名称和六位配对码，再批准申请。配对码不是客户端秘密凭据。</p><div id="clients"></div></section>
-    <button id="read-quota" type="button">读取额度观察</button>
-    <p id="state" role="status">正在读取…</p>
-    <pre id="result" aria-label="额度读取结果"></pre>
-  </main>
+  <div id="app"></div>
   <script src="renderer.js"></script>
 </body>
 </html>

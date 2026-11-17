@@ -4,6 +4,9 @@ declare const __DOG_BUILD_VERSION__: string;
 export const version = typeof __DOG_BUILD_VERSION__ === 'string' ? __DOG_BUILD_VERSION__ : '0.6.0-g06';
 export const apiVersion = '3';
 export const emptyParams = z.object({}).strict();
+export const sourceSelection = z.object({ source: z.enum(['fixture', 'live-readonly']), callerThreadId: z.union([z.literal(''), z.string().uuid()]), pipe: z.string().max(160).refine(value => !value || /^\\\\\.\\pipe\\codex-app-tools-[a-zA-Z0-9-]{1,100}$/.test(value)) }).strict();
+export const sourceConfigureParams = sourceSelection.extend({ expectedRevision: z.number().int().positive() }).refine(value => value.source !== 'live-readonly' || !!value.callerThreadId, '真实模式必须明确调用会话');
+export const quitParams = z.object({ expectedInstanceId: z.string().uuid(), confirm: z.literal(true) }).strict();
 export const describeParams = z.object({ operation: z.string().min(1).max(100) }).strict();
 export const scopeSchema = z.enum(['read', 'access.manage', 'app.manage']);
 export type Scope = z.infer<typeof scopeSchema>;
@@ -19,6 +22,10 @@ export const updateInstallParams = z.object({ artifactId: z.string().uuid(), exp
 export const liveOperations = new Set(['connections.discover', 'connections.get', 'quota.refresh', 'threads.list', 'threads.get', 'goals.get']);
 export const workerOperations = new Set(['quota.get', ...liveOperations]);
 export const definitions = [
+  { operation: 'connections.configuration', command: ['connections', 'configuration'], tool: 'connections_configuration', description: '读取当前和下次启动的显式来源选择。', input: emptyParams, scope: 'read', readOnly: true },
+  { operation: 'connections.configure', command: ['connections', 'configure'], tool: 'connections_configure', description: '保存下次启动的来源选择，当前进程不自动切换；需要应用管理权限。', input: sourceConfigureParams, scope: 'app.manage', readOnly: false },
+  { operation: 'desktop.show', command: ['desktop', 'show'], tool: 'desktop_show', description: '显示本应用窗口，应用离线时不拉起。', input: emptyParams, scope: 'read', readOnly: true },
+  { operation: 'app.quit', command: ['app', 'quit'], tool: 'app_quit', description: '明确退出指定应用实例并停止本机接口及子进程。', input: quitParams, scope: 'app.manage', readOnly: false },
   { operation: 'quota.get', command: ['quota', 'get'], tool: 'quota_get', description: '读取当前模式额度观察，明确来源、未知与过期状态。', input: emptyParams, scope: 'read', readOnly: true },
   { operation: 'app.status', command: ['app', 'status'], tool: 'app_status', description: '读取主应用、心跳与业务进程恢复状态。', input: emptyParams, scope: 'read', readOnly: true },
   { operation: 'app.version', command: ['app', 'version'], tool: 'app_version', description: '读取正在运行的主应用版本。', input: emptyParams, scope: 'read', readOnly: true },

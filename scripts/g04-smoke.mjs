@@ -12,7 +12,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 const target = process.env.CODEX_THREAD_ID;
 assert(target && /^[a-f0-9-]{36}$/i.test(target), '请明确提供 CODEX_THREAD_ID，只验证该现有会话');
 const profile = 'g04-read-' + randomUUID().slice(0, 8);
-const executable = resolve('release/g04/codex-dog.exe');
+const executable = resolve('release/g06/codex-dog.exe');
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 let desktop; let page; let directory; let descriptor; let client; let transport;
 const checks = []; const pageErrors = []; const mark = value => { checks.push(value); console.log('[G04] ' + value); };
@@ -40,6 +40,7 @@ try {
   mark('发现并锁定当前唯一桌面工具管道，不读取索引末行猜选调用者');
   assert.equal((await cli(['quota', 'get'])).value.error.code, 'AUTH_REQUIRED');
   const registration = good((await cli(['access', 'request'])).value); const card = page.locator(`[data-client-id="${registration.id}"]`);
+  await page.getByRole('button', { name: '客户端授权', exact: true }).click();
   await card.getByRole('textbox', { name: '配对码' }).fill(registration.code); await card.getByRole('button', { name: '批准读取' }).click();
   await until(async () => (await cli(['quota', 'get'])).code === 0, '等待桌面批准读取');
   const quota = good((await cli(['quota', 'get'])).value); assert.equal(quota.source, 'live'); assert.equal(quota.stale, false); assert.equal(quota.windows.length, 2); assert(!('accountId' in quota));
@@ -67,7 +68,7 @@ try {
   const unknownTarget = await cli(['threads', 'get', '--input', '-'], { ...params, threadId: randomUUID() }); assert.equal(unknownTarget.code, 5); assert.equal(unknownTarget.value.error.code, 'PROVIDER_UNAVAILABLE');
   mark('失效连接引用和真实不存在会话均明确失败，不返回空数据冒充读取成功');
   assert.equal((await ipc('threads.send', { threadId: target, prompt: 'never-dispatched' })).error.code, 'CAPABILITY_UNSUPPORTED');
-  const tools = (await client.listTools()).tools; assert.equal(tools.length, 19); assert(!tools.some(t => /send|consume|reset/i.test(t.name)));
+  const tools = (await client.listTools()).tools; assert.equal(tools.length, 23); assert(!tools.some(t => /send|consume|reset/i.test(t.name)));
   connection = good(await ipc('connections.get')); const calls = connection.readCalls;
   assert(Object.keys(calls).every(k => ['get_usage_limits', 'list_threads', 'read_thread'].includes(k))); assert(calls.get_usage_limits > 0 && calls.list_threads > 0 && calls.read_thread > 0);
   mark('公开目录不含发送/卡消费，传输调用审计仅出现三项只读工具');

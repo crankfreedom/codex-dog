@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "pnpm typecheck && node scripts/build.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit",
     "start": "node scripts/launch.mjs",
     "dev": "pnpm build && pnpm start",
     "cli": "node out/cli.cjs",
@@ -29,23 +29,29 @@
     "release:check": "node scripts/package-release.mjs --check",
     "release:build": "node scripts/package-release.mjs",
     "check:release": "node scripts/check-release.mjs",
-    "test:g06": "node scripts/g06-smoke.mjs"
+    "test:g06": "node scripts/g06-smoke.mjs",
+    "test:stage2": "node scripts/stage2-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
     "builder-util-runtime": "9.7.0",
     "electron-updater": "6.8.11",
+    "element-plus": "2.14.8",
+    "pinia": "4.1.0",
     "semver": "7.7.3",
+    "vue": "3.5.45",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
     "@types/node": "24.19.2",
     "@types/semver": "7.7.1",
+    "@vue/compiler-sfc": "3.5.45",
     "electron": "45.0.0",
     "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
     "typescript": "5.9.3",
+    "vue-tsc": "3.3.14",
     "yaml": "2.9.1"
   },
   "description": "Codex Dog 独立桌面管理工具（G06 发行准备）",

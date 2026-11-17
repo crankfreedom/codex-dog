@@ -5,8 +5,8 @@ Codex 任务托管与自动化管理工具，中文昵称「守码犬」。Dog �
 ## 当前可用范围
 
 G01–G04 已完成：Electron 主应用、独立业务进程、统一业务入口、独立 CLI EXE、IPC/MCP、本机配对授权与进程恢复。
-当前共 19 项能力：基础读取、配对授权、真实连接发现、额度/会话/Goal 读取，以及更新状态、检查、下载和安装；默认申请 read，更新管理须桌面单独批准 app.manage。
-默认额度 source=fixture；显式 live-readonly 接入真实 Codex，只读额度、会话和 Goal。SQLite 仍仅保存模拟观察及事务；最小窗口支持配对和状态展示，没有完整界面或托盘。
+当前共 23 项能力：基础读取、配对授权、真实连接发现、额度/会话/Goal、更新，以及来源配置、显示窗口和明确退出；默认申请 read，来源配置/退出/更新须桌面单独批准 app.manage。
+阶段 2 提供 Vue 3 主窗口、额度总览、客户端授权、连接来源配置和托盘。全新 profile 默认 fixture；真实 live-readonly 须显式选择，保存来源在下次启动生效。SQLite 仍仅保存模拟观察及事务，真实观察仅留内存。
 G03 仅隔离锁验证，G04 仅真实只读观察；未发送消息或消费重置卡。G05 两版 NSIS 与真实 GitHub 更新已通过。G06 已新增发行配置、签名入口、只构建 Actions 和 Preview；远端 CI/Preview 的构建及实装已跑通，真实签名与正式发行未放行。
 
 ## 开发环境启动
@@ -50,7 +50,7 @@ pnpm --dir codex-dog pack:cli
 
 MCP 的 mcp 客户端须另外调用 access_request 并配对；完整管理授权与配置见 [G02 手册](docs/g02.md)。
 独立 CLI 内置 Node 运行时，不要求机器预装 Node；release/g06/codex-dog.exe 是未签名验证产物，不是桌面安装器。
-当前 API major=3，旧 API 1/2 EXE 均须重新构建，已有授权和数据库保留。应用关闭后返回 APP_NOT_RUNNING，不自动启动应用。
+当前 API major=3，旧 API 1/2 EXE 均须重新构建，已有授权和数据库保留。关闭窗口继续驻托盘；明确退出后返回 APP_NOT_RUNNING，不自动启动应用。
 
 ## 验证
 
@@ -67,10 +67,14 @@ pnpm --dir codex-dog pack:cli
 pnpm --dir codex-dog check:release
 pnpm --dir codex-dog test:g03
 pnpm --dir codex-dog test:g02
+pnpm --dir codex-dog test:stage2
+# 本机真实只读（明确提供 CODEX_THREAD_ID；不会在 runner 执行）：
+pnpm --dir codex-dog test:stage2 --live
 ~~~
 
 ## 文档导航
 
+- [阶段 2 只读桌面](docs/stage2.md)：使用、来源配置、托盘、安装版与模拟/真实/runner 证据分界。
 - [计划总览](PROJECT_PLAN.md)：范围、决策、状态与文档入口，不再承载全部技术细节。
 - [G06 发行准备](docs/g06.md)：运行时/PowerShell/ACL 别名修复；本机 90 项通过，远端 86 通过/4 旧源码 skip，CI 回归与 Preview 实装通过，完整 G06 未放行。
 - [G05 使用及实测记录](docs/g05.md)：独立更新模块、CLI 文件占用与恢复；本机 NSIS 11 组及真实 GitHub 8 组通过，保留 80 项单元测试证据；两个公开预发布均非 latest，不是正式 stable。

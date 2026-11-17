@@ -28,7 +28,7 @@ try {
   await command(process.execPath, ['scripts/build.mjs'], { DOG_BUILD_VERSION: policy.version });
   await command(process.execPath, ['scripts/pack-cli.mjs'], { DOG_CLI_OUTPUT: cli });
   await cp('out', join(app, 'out'), { recursive: true });
-  await writeFile(join(app, 'package.json'), JSON.stringify({ name: 'codex-dog-' + policy.mode, version: policy.version, productName: policy.productName, main: 'out/main.cjs', description: 'Codex Dog 发行准备；当前仅模拟数据', author: 'crankfreedom', private: true }));
+  await writeFile(join(app, 'package.json'), JSON.stringify({ name: 'codex-dog-' + policy.mode, version: policy.version, productName: policy.productName, main: 'out/main.cjs', description: 'Codex Dog 只读桌面；默认模拟，可显式选择真实只读', author: 'crankfreedom', private: true, dependencies: {} }));
   await writeFile(join(resources, 'dog-distribution.json'), JSON.stringify(policy.manifest));
   await build({ targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), publish: 'never', config: {
     appId: policy.appId, productName: policy.productName, executableName: policy.executableName,
@@ -37,7 +37,7 @@ try {
     forceCodeSigning: policy.signing.forceCodeSigning,
     extraResources: [{ from: cli, to: 'cli/codex-dog.exe' }, { from: join(resources, 'dog-distribution.json'), to: 'dog-distribution.json' }, { from: resolve('build/cli-file-guard.ps1'), to: 'cli-file-guard.ps1' }, { from: resolve('build/verify-signature.ps1'), to: 'verify-signature.ps1' }],
     win: { target: ['nsis'], artifactName: policy.artifactName, signAndEditExecutable: true, ...(policy.signing.forceCodeSigning ? { icon: resolve('build/icon.ico') } : {}), ...policy.signing.win },
-    nsis: { oneClick: true, perMachine: false, allowElevation: false, runAfterFinish: false, createDesktopShortcut: false, createStartMenuShortcut: false, deleteAppDataOnUninstall: false, include: resolve('build/installer.nsh'), differentialPackage: false, packElevateHelper: false },
+    nsis: { oneClick: true, perMachine: false, allowElevation: false, runAfterFinish: false, createDesktopShortcut: false, createStartMenuShortcut: true, deleteAppDataOnUninstall: false, include: resolve('build/installer.nsh'), differentialPackage: false, packElevateHelper: false },
     publish: [{ provider: 'github', owner: 'crankfreedom', repo: 'codex-dog', releaseType: 'draft', channel: policy.channel === 'stable' ? 'latest' : 'beta' }],
     afterPack: async context => { if (policy.signing.forceCodeSigning) await context.packager.sign(join(context.appOutDir, 'resources/cli/codex-dog.exe')); },
   } });
@@ -51,6 +51,6 @@ try {
   if (policy.signing.forceCodeSigning) await writeFile(join(output, policy.channel === 'stable' ? 'latest.yml' : 'beta.yml'), `version: ${JSON.stringify(policy.version)}\nfiles:\n  - url: ${JSON.stringify(name)}\n    sha512: ${JSON.stringify(sha512)}\n    size: ${size}\npath: ${JSON.stringify(name)}\nsha512: ${JSON.stringify(sha512)}\n`);
   else { const { unlink } = await import('node:fs/promises'); for (const name of ['latest.yml', 'beta.yml']) await unlink(join(output, name)).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
   await mkdir('artifacts/g06', { recursive: true });
-  await writeFile('artifacts/g06/package.json', JSON.stringify({ result: 'passed', runId, mode: policy.mode, version: policy.version, appId: policy.appId, executable: policy.executableName + '.exe', profile: policy.manifest.profile, installer, output, size, sha512, signed: policy.signing.forceCodeSigning, source: 'fixture-only', published: false }, null, 2));
+  await writeFile('artifacts/g06/package.json', JSON.stringify({ result: 'passed', runId, mode: policy.mode, version: policy.version, appId: policy.appId, executable: policy.executableName + '.exe', profile: policy.manifest.profile, installer, output, size, sha512, signed: policy.signing.forceCodeSigning, source: 'fixture-default-explicit-readonly', published: false }, null, 2));
   console.log('发行准备包已生成；publish=never，未上传或发布。');
 } finally { await command(process.execPath, ['scripts/build.mjs']); }

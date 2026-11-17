@@ -25,7 +25,7 @@ const store = new SqliteStore(join(directory, 'codex-dog.sqlite'), stage => prob
 const mode = process.env.CODEX_DOG_SOURCE ?? 'fixture';
 if (mode !== 'fixture' && mode !== 'live-readonly') throw new Error('无效来源模式');
 const live = mode === 'live-readonly' ? new ReadonlyRegistry(new CodexReadonlyService(
-  new CodexDesktopReadonly({ callerThreadId: process.env.CODEX_DOG_CALLER, pipe: process.env.CODEX_DOG_CODEX_PIPE || undefined }),
+  new CodexDesktopReadonly({ callerThreadId: process.env.CODEX_DOG_CALLER, pipe: process.env.CODEX_DOG_CODEX_PIPE || undefined, timeoutMs: 15000 }),
   new CodexGoalReadonly(process.env.CODEX_DOG_CODEX_HOME || join(homedir(), '.codex')),
   { now: Date.now, newId: randomUUID, digest: value => createHash('sha256').update(value).digest('hex') }), identity) : undefined;
 const registry = live ?? new ApplicationRegistry(new PersistedUsageReader(store, new FixtureUsageReader(scenario), scenario), identity);
