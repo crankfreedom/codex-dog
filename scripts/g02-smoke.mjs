@@ -96,8 +96,8 @@ try {
   const acl = await nativeProbe('Inspect');
   assert.equal(acl.ownerSid, descriptor.ownerSid); assert.equal(acl.rootProtected, true);
   const allow = [...acl.pipeSddl.matchAll(/\(A;[^)]*\)/g)].map(match => match[0]);
-  assert.equal(allow.length, 1); assert(allow[0].includes(descriptor.ownerSid)); assert(/\(D;[^)]*;;;NU\)/.test(acl.pipeSddl));
-  assert(acl.rootSddl.includes(descriptor.ownerSid));
+  assert.equal(allow.length, 1); assert.equal(acl.pipeAclVerified, true); assert(/\(D;[^)]*;;;NU\)/.test(acl.pipeSddl));
+  assert.equal(acl.rootAclVerified, true);
   assert.equal([...acl.rootSddl.matchAll(/\(A;[^)]*\)/g)].length, 1);
   const anonymous = await nativeProbe('AnonymousProbe'); assert.equal(anonymous.denied, true); assert.equal(anonymous.error, 5);
   mark('实际管道 DACL 仅允许当前 SID、拒绝网络登录；匿名模拟身份实际连接被拒绝');

@@ -1,4 +1,4 @@
-param([ValidateSet('Host','AnonymousProbe','Inspect')][string]$Mode = 'Host', [Parameter(Mandatory=$true)][string]$PipeName, [string]$Directory)
+param([ValidateSet('Host','AnonymousProbe','Inspect','AclSelfTest')][string]$Mode = 'Host', [Parameter(Mandatory=$true)][string]$PipeName, [string]$Directory)
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
@@ -39,6 +39,40 @@ public static class DogPipe {
     security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.NetworkSid, null), PipeAccessRights.FullControl, AccessControlType.Deny));
     security.AddAccessRule(new PipeAccessRule(sid, PipeAccessRights.FullControl, AccessControlType.Allow));
     return security;
+  }
+  static bool OwnerOnly(CommonObjectSecurity security) {
+    bool found = false;
+    foreach (AccessRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier))) {
+      if (rule.AccessControlType != AccessControlType.Allow) continue;
+      if (rule.IdentityReference.Value != Owner) return false;
+      found = true;
+    }
+    return found;
+  }
+  static bool PipeAclVerified(PipeSecurity security) {
+    bool ownerFull = false, networkDenied = false;
+    string network = new SecurityIdentifier(WellKnownSidType.NetworkSid, null).Value;
+    foreach (PipeAccessRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier))) {
+      bool full = (rule.PipeAccessRights & PipeAccessRights.FullControl) == PipeAccessRights.FullControl;
+      if (rule.IdentityReference.Value == Owner && rule.AccessControlType == AccessControlType.Allow && full) ownerFull = true;
+      if (rule.IdentityReference.Value == network && rule.AccessControlType == AccessControlType.Deny && full) networkDenied = true;
+    }
+    return security.AreAccessRulesProtected && OwnerOnly(security) && ownerFull && networkDenied;
+  }
+  static bool RootAclVerified(DirectorySecurity security) {
+    bool ownerFull = false;
+    foreach (FileSystemAccessRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier))) {
+      if (rule.IdentityReference.Value == Owner && rule.AccessControlType == AccessControlType.Allow && (rule.FileSystemRights & FileSystemRights.FullControl) == FileSystemRights.FullControl) ownerFull = true;
+    }
+    return security.AreAccessRulesProtected && OwnerOnly(security) && ownerFull;
+  }
+  public static void AclSelfTest() {
+    Owner = WindowsIdentity.GetCurrent().User.AccountDomainSid.Value + "-500";
+    var security = Security();
+    bool alias = !security.GetSecurityDescriptorSddlForm(AccessControlSections.Access).Contains(Owner);
+    bool accepted = PipeAclVerified(security);
+    security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null), PipeAccessRights.Read, AccessControlType.Allow));
+    Output(new { serializedUsesAlias = alias, correctAclAccepted = accepted, extraPrincipalRejected = !PipeAclVerified(security) });
   }
   static NamedPipeServerStream Create() {
     if (!First) return new NamedPipeServerStream(Pipe, PipeDirection.InOut, 17, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 4096, 4096, Security());
@@ -108,7 +142,8 @@ public static class DogPipe {
     if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^codex-dog-g02-[a-f0-9]{16}-[a-zA-Z0-9_-]{1,40}$")) throw new InvalidOperationException("Invalid pipe name");
     Owner = WindowsIdentity.GetCurrent().User.Value; Pipe = name; ProtectDirectory(directory); Listener = Create();
     Output(new { type = "ready", pid = System.Diagnostics.Process.GetCurrentProcess().Id, ownerSid = Owner,
-      pipeSddl = Listener.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Access), rootProtected = System.IO.Directory.GetAccessControl(directory).AreAccessRulesProtected });
+      pipeSddl = Listener.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Access), rootProtected = System.IO.Directory.GetAccessControl(directory).AreAccessRulesProtected,
+      pipeAclVerified = PipeAclVerified(Listener.GetAccessControl()), rootAclVerified = RootAclVerified(System.IO.Directory.GetAccessControl(directory)) });
     var accepting = Task.Run((Action)Accept);
     try {
       string line;
@@ -134,15 +169,18 @@ public static class DogPipe {
     Output(new { denied = !connected && error == 5, error = error });
   }
   public static void Inspect(string name, string directory) {
+    Owner = WindowsIdentity.GetCurrent().User.Value;
     using (var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.None, TokenImpersonationLevel.Identification)) {
       client.Connect(3000);
       Output(new { ownerSid = WindowsIdentity.GetCurrent().User.Value, pipeSddl = client.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.Access), rootProtected = System.IO.Directory.GetAccessControl(directory).AreAccessRulesProtected,
-        rootSddl = System.IO.Directory.GetAccessControl(directory).GetSecurityDescriptorSddlForm(AccessControlSections.Access) });
+        rootSddl = System.IO.Directory.GetAccessControl(directory).GetSecurityDescriptorSddlForm(AccessControlSections.Access),
+        pipeAclVerified = PipeAclVerified(client.GetAccessControl()), rootAclVerified = RootAclVerified(System.IO.Directory.GetAccessControl(directory)) });
     }
   }
 }
 '@
-if ($Mode -eq 'AnonymousProbe') { [DogPipe]::Probe($PipeName) }
+if ($Mode -eq 'AclSelfTest') { [DogPipe]::AclSelfTest() }
+elseif ($Mode -eq 'AnonymousProbe') { [DogPipe]::Probe($PipeName) }
 elseif ($Mode -eq 'Inspect') { [DogPipe]::Inspect($PipeName, $Directory) }
 else { [DogPipe]::Host($PipeName, $Directory) }
 } catch {

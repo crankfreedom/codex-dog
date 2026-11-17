@@ -5,7 +5,7 @@ import type { Response } from '../contracts/protocol.ts';
 import { failure } from '../contracts/protocol.ts';
 import { windowsPowerShellEnvironment } from './windows-powershell.ts';
 
-export interface PipeIdentity { pid: number; ownerSid: string; pipeSddl: string; rootProtected: boolean }
+export interface PipeIdentity { pid: number; ownerSid: string; pipeSddl: string; rootProtected: boolean; pipeAclVerified: boolean; rootAclVerified: boolean }
 class PipeHostError extends Error { code: string; detail: number | null; constructor(code: string, detail: number | null = null) { super('Windows 安全管道启动失败'); this.code = code; this.detail = detail; } }
 export class SecurePipeHost {
   private child?: ChildProcessWithoutNullStreams;

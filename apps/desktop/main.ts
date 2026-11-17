@@ -96,7 +96,7 @@ async function start() {
   if (stopping) throw new Error('启动已取消');
   startupPhase('pipe');
   const identity = await pipe.start(); ownerSid = identity.ownerSid;
-  if (!identity.rootProtected || !identity.pipeSddl.includes(ownerSid) || !identity.pipeSddl.includes('NU')) throw new Error('Windows ACL 校验失败');
+  if (!identity.rootProtected || identity.pipeAclVerified !== true || identity.rootAclVerified !== true) throw Object.assign(new Error('Windows ACL 校验失败'), { code: 'PIPE_ACL_INVALID' });
   if (stopping) throw new Error('启动已取消');
   startupPhase('access'); await access.start();
   if (stopping) throw new Error('启动已取消');

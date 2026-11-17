@@ -1,5 +1,5 @@
 const stages = ['bootstrap', 'pipe', 'access', 'worker', 'update', 'window'] as const;
-const codes = ['BEGIN', 'READY', 'STARTUP_FAILED', 'PIPE_HOST_TIMEOUT', 'PIPE_HOST_SPAWN_FAILED', 'PIPE_HOST_EARLY_EXIT', 'PIPE_HOST_INIT_FAILED', 'PIPE_WIN32_ERROR', 'PIPE_ACCESS_DENIED', 'PIPE_SECURITY_ERROR', 'PIPE_IO_ERROR'] as const;
+const codes = ['BEGIN', 'READY', 'STARTUP_FAILED', 'PIPE_ACL_INVALID', 'PIPE_HOST_TIMEOUT', 'PIPE_HOST_SPAWN_FAILED', 'PIPE_HOST_EARLY_EXIT', 'PIPE_HOST_INIT_FAILED', 'PIPE_WIN32_ERROR', 'PIPE_ACCESS_DENIED', 'PIPE_SECURITY_ERROR', 'PIPE_IO_ERROR'] as const;
 export interface StartupDiagnostic { stage: string; code: string; detail: number | null }
 export function startupDiagnostic(stage: string, code: unknown, detail?: unknown): StartupDiagnostic {
   return { stage: (stages as readonly string[]).includes(stage) ? stage : 'bootstrap', code: typeof code === 'string' && (codes as readonly string[]).includes(code) ? code : 'STARTUP_FAILED', detail: typeof detail === 'number' && Number.isSafeInteger(detail) ? detail : null };
