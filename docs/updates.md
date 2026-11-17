@@ -35,7 +35,7 @@
 
 ### 更新源与安全
 
-用户于 2026-11-16 将发行平台改为 GitHub，随后指定公开仓库 crankfreedom/codex-dog，当前源码与发行共用该仓库。G05 已验证 GitHub Releases 下载及安装；G06 新增本地 Actions 文件，当前仅校验与构建 artifact，未推送实跑，也没有自动创建草稿或正式发布的步骤。不再以自有域名、对象存储或 GitHub Pages 为首版更新源。
+用户于 2026-11-16 将发行平台改为 GitHub，随后指定公开仓库 crankfreedom/codex-dog，当前源码与发行共用该仓库。G05 已验证 GitHub Releases 下载及安装；G06 的远端 CI/Preview 已跑通，当前仅校验、构建和验证 artifact，没有自动创建草稿或正式发布步骤。不再以自有域名、对象存储或 GitHub Pages 为首版更新源。
 
 G06 正式更新入口区分 stable/beta，安装前必须验证 Authenticode、发布者及时间戳；无签名 Preview 不接入更新。用户暂无服务/证书，当前仅实现接入门禁，可信签名和签名后的实际升级尚待验证。
 
