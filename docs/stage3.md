@@ -23,7 +23,7 @@
 
 ## 实施和证据
 
-当前代码已实现，本机开发版验收通过；安装和远端验证中，完成后更新本节，不提前标为通过。
+本轮验收完成。以下本机与 runner 证据分开保存；只有本机显式真实模式连接了真实来源。
 
 | 环境 | 当前证据 | 状态 |
 |---|---|---|
@@ -31,9 +31,15 @@
 | 本机开发版模拟 | artifacts/stage3/development-fixture.json，8 组，页面/控制台错误为空 | 通过 |
 | 本机开发版真实 | artifacts/stage3/development-live.json，7 组，真实会话/Goal/诊断及三入口；有一次重启首读 READ_TIMEOUT，界面未知、无来源回退 | 通过当前只读范围，异常另记 |
 | 既有回归 | G03 12 组（现 Schema 3）、G02 20 组、阶段 2 模拟 9 组 | 通过 |
-| 本机 Preview 安装版 | 0.6.0-beta.4 仅构建/安装，不发布；将跑阶段 2/3 同一链路及真实只读 | 待完成 |
-| 远端 CI | 本轮模块、边界、文档、G03/G02、阶段 2/3 模拟；旧源码四项仍须明确 skip | 待完成 |
-| 远端 Preview | 本轮实际 NSIS 构建、安装和阶段 2/3 模拟；不接真实来源 | 待完成 |
+| 本机 Preview 安装版 | 0.6.0-beta.4 / 3b39f80f：NSIS 4 组、阶段 2 模拟 9 组、阶段 3 模拟 8 组/真实 7 组；installed-*.json | 通过 |
+| 远端 CI | [44046638966](https://github.com/crankfreedom/codex-dog/actions/runs/44046638966)：110 项中 106 通过/4 旧源码 skip，边界/文档/发行检查、G03/G02 12/20 组、阶段 2/3 模拟 9/8 组 | 通过；旧源码四项明确 skip |
+| 远端 Preview | [44046738472](https://github.com/crankfreedom/codex-dog/actions/runs/44046738472)：实际 NSIS 构建/安装 4 组、阶段 2/3 模拟 9/8 组；不接真实来源 | 通过 |
+
+本机最终安装包为 `release/g06/preview/0.6.0-beta.4/3b39f80f/Codex-Dog-Preview-0.6.0-beta.4-Setup.exe`，142563846 字节；独立重算 SHA-512 与 package.json 一致。已安装入口为 `artifacts/g06/installed/3b39f80f/CodexDogPreview.exe`，亦可通过本轮 Preview 开始菜单快捷方式启动。固定数据目录操作另验：read 拒绝、任意 path 参数拒绝、可信桌面调用系统打开成功、退出后端点和本实例进程清理。
+
+失败记录保留于 `artifacts/stage3/known-failures.json`：早期设置加载覆盖输入已修复并复验；开发版真实重启首读 READ_TIMEOUT 作为未知展示；安装版真实首次 threads.list 超时，同来源新 profile 显式复验通过，未自动回退。最终安装版真实观察读取到 active Goal，但 completionConfirmed=false、账号绑定未证实。
+
+CI/Preview 针对同一实现提交运行；本轮收尾提交仅更新三个验收文档，并单独等待其 CI。远端报告与运行 ID 在 `artifacts/stage3/remote-ci`、`remote-preview` 核对；Preview 仅按 HTTP Range 提取小报告并验证 ZIP CRC32，未完整下载远端安装包或在本机重装 runner 包。原生托盘菜单的通知区域直接点击没有新增自动化证据；实际窗口 close、驻留查询、重开、明确退出与离线均通过统一入口回归。
 
 ## 日常使用
 
@@ -49,7 +55,7 @@
 
 ## CLI/MCP 接入
 
-先使用配套 CLI，在同一 profile 申请 read；需要修改本应用设置时单独申请 settings.manage，在桌面勾选后批准。既有授权不自动扩权；settings.manage 不授予 app.manage 或 access.manage。
+先使用配套 CLI，在同一 profile 申请 read；需要修改本应用设置时单独申请 settings.manage，在桌面勾选后批准。既有授权不自动扩权；需要增权时使用新的 `--client` 名称重新申请（当前不支持原地扩权）。settings.manage 不授予 app.manage 或 access.manage。
 
 ~~~powershell
 codex-dog.exe access request --input pairing.json --profile PROFILE --client manager --json
