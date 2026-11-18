@@ -42,7 +42,10 @@ export class TaskService {
     await this.ports.authorize(actor,'tasks.manage');if(binding)await this.ports.authorize(actor,'messages.send');
     const state=this.store.readAutomation();
     const replay=previous(this.store,actor.clientId,operation,key,p,this.ports);if(replay.result)return replay.result;
-    if(state.version!==before.version)throw new AutomationError('REVISION_CONFLICT','核验期间业务状态变化，请重新读取');
+    // Only create/enable carry provider observations from the earlier snapshot.
+    // Pause/edit/remove recheck the current task, unresolved attempts and revision below;
+    // an unrelated notification cursor must not invalidate these local mutations.
+    if(['tasks.create','tasks.enable'].includes(operation)&&state.version!==before.version)throw new AutomationError('REVISION_CONFLICT','核验期间业务状态变化，请重新读取');
     const at=new Date(this.ports.now()).toISOString();
     if(operation==='tasks.create'){
       if(state.tasks.length>=1000)throw new AutomationError('CLIENT_LIMIT','任务数量达到上限');

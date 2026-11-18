@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
 import {createServer} from 'node:net';
 import {DatabaseSync} from 'node:sqlite';
-import {mkdtemp,readFile,writeFile,mkdir,access} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,mkdir,access,realpath} from 'node:fs/promises';
 import {tmpdir,homedir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {spawn} from 'node:child_process';
@@ -26,7 +26,7 @@ async function until(fn,message){const end=Date.now()+30000;while(!await fn()){a
 const ipc=(operation,params={},key)=>page.evaluate(({operation,params,key})=>window.codexDog.request(operation,params,key),{operation,params,key});
 async function cli(args,input){return new Promise((done,reject)=>{const child=spawn(cliPath,[...args,'--profile',profile,'--client','gate-reader','--json','--timeout-ms','60000'],{windowsHide:true,env:{...env,PATH:'',NODE_OPTIONS:''},stdio:'pipe'});let output='';const timer=setTimeout(()=>{child.kill();reject(Error('CLI_TIMEOUT'));},65000);child.stdout.on('data',data=>output+=data);child.stderr.resume();child.once('error',reject);child.once('exit',code=>{clearTimeout(timer);try{done({code,value:JSON.parse(output)});}catch{reject(Error('CLI_INVALID_JSON'));}});child.stdin.end(input?JSON.stringify(input):undefined);});}
 async function mockSource(){
- codexHome=await mkdtemp(join(tmpdir(),'dog-native-metadata-fixture-'));locks=join(codexHome,'locks');await mkdir(locks);
+ codexHome=await mkdtemp(join(await realpath(tmpdir()),'dog-native-metadata-fixture-'));locks=join(codexHome,'locks');await mkdir(locks);
  for(const [file,sql,insert,values] of [
   ['state_5.sqlite','CREATE TABLE threads(id TEXT,creator_account_id TEXT,preview TEXT)','INSERT INTO threads VALUES(?,?,?)',[target,'simulated-account','fixture-private']],
   ['goals_1.sqlite','CREATE TABLE thread_goals(thread_id TEXT,goal_id TEXT,status TEXT,objective TEXT)','INSERT INTO thread_goals VALUES(?,?,?,?)',[target,'fixture-goal','active','fixture-private']],

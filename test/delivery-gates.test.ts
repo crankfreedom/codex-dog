@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {mkdtempSync,readFileSync,readdirSync,renameSync,mkdirSync,symlinkSync} from 'node:fs';
+import {mkdtempSync,realpathSync,readFileSync,readdirSync,renameSync,mkdirSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
@@ -16,7 +16,7 @@ import {defaultSourceState} from '../packages/app/source-configuration.ts';
 
 const thread=randomUUID(),owner='fixture-account',hash=createHash('sha256').update(owner).digest('hex');
 function metadataFixture(){
- const directory=mkdtempSync(join(tmpdir(),'dog-metadata-中文 空格-'));
+ const directory=mkdtempSync(join(realpathSync.native(tmpdir()),'dog-metadata-中文 空格-'));
  const db=(file:string,sql:string,args:unknown[])=>{const d=new DatabaseSync(join(directory,file));d.exec(sql);d.prepare(file==='state_5.sqlite'?'INSERT INTO threads(id,creator_account_id) VALUES(?,?)':file==='goals_1.sqlite'?'INSERT INTO thread_goals(thread_id,goal_id,status) VALUES(?,?,?)':'INSERT INTO thread_turns(thread_id,turn_id,status,first_user_item_id,rollout_ordinal) VALUES(?,?,?,?,?)').run(...args as [string]);d.close();};
  // The adapter installs a SQLite authorizer allowing only the fixed metadata columns.
  db('state_5.sqlite',"CREATE TABLE threads(id TEXT PRIMARY KEY,creator_account_id TEXT,preview TEXT DEFAULT 'private-body',first_user_message TEXT DEFAULT 'private-first')",[thread,owner]);
@@ -62,5 +62,5 @@ test('fixture 门禁不触碰真实端口；真实只读诊断门禁不调用会
 test('来源路径为明确本机目录，拒绝 UNC/相对/设备路径；存储超限拒绝且原文件保留',async()=>{
  for(const path of ['relative','\\\\server\\share','\\\\?\\C:\\data','C:\\bad\npath','C:relative'])assert(!sourceSelection.safeParse({source:'fixture',callerThreadId:'',pipe:'',codexHome:path}).success);
  assert(sourceSelection.safeParse({source:'fixture',callerThreadId:'',pipe:'',codexHome:'C:\\资料 空格\\.codex',legacyLockDirectory:'D:\\locks'}).success);
- const dir=mkdtempSync(join(tmpdir(),'dog-source-bound-')),file=join(dir,'source.json'),store=new FileSourceStore(file),state=defaultSourceState();await store.save(state);const before=readFileSync(file);state.requests=Array.from({length:2048},(_,i)=>({key:String(i),body:'汉'.repeat(2000),result:{}}));await assert.rejects(store.save(state));assert.deepEqual(readFileSync(file),before);assert.deepEqual(readdirSync(dir),['source.json']);
+ const dir=mkdtempSync(join(realpathSync.native(tmpdir()),'dog-source-bound-')),file=join(dir,'source.json'),store=new FileSourceStore(file),state=defaultSourceState();await store.save(state);const before=readFileSync(file);state.requests=Array.from({length:2048},(_,i)=>({key:String(i),body:'汉'.repeat(2000),result:{}}));await assert.rejects(store.save(state));assert.deepEqual(readFileSync(file),before);assert.deepEqual(readdirSync(dir),['source.json']);
 });

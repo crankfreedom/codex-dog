@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,existsSync,readFileSync,readdirSync,writeFileSync,renameSync,mkdirSync,symlinkSync,linkSync} from 'node:fs';
+import {mkdtempSync,realpathSync,existsSync,readFileSync,readdirSync,writeFileSync,renameSync,mkdirSync,symlinkSync,linkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import {fork} from 'node:child_process';
 import {once} from 'node:events';
 import {LegacyLockGate} from '../packages/infrastructure/legacy-lock-gate.ts';
-const directory=()=>mkdtempSync(join(tmpdir(),'dog-readonly-lock-中文 空格-'));
+const directory=()=>mkdtempSync(join(realpathSync.native(tmpdir()),'dog-readonly-lock-中文 空格-'));
 const file=(dir:string,target:string)=>join(dir,createHash('sha256').update(target).digest('hex')+'.lock');
 const legacySource=resolve(process.env.DOG_LEGACY_SOURCE??'../codex-resume/src/store.ts');
 
