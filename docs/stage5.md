@@ -4,7 +4,7 @@
 
 - 需求：REQ-20261117-05；工程、隔离模块及本机/runner 安装模拟已验证，真实卡来源及副作用正例未验，不宣称本轮总验收完成。
 - CardService、FixtureCards 和 AppServerCards 共用卡片端口；主应用是唯一业务入口，CLI/MCP 不自行访问 App Server 或数据库。
-- 当前真实读取/消费均未执行；新 App Server 适配器仅有实际 Schema 证据与隔离进程模拟测试。
+- 真实消费未执行。用户分别授权两次新增只读：首次请求完成但测试报告目录遗漏，结果未留存、不计通过；额外一次返回 known/live 与 3 张 available 卡，脱敏报告保存且主应用/自建进程清理通过。未创建预约、未发送、未消费，来源消费开关为关闭。
 - 真实来源必须明确指定本机 codex.exe，不自动发现或改选；留空不启动卡片来源。真实消费来源另须明确开启，每笔预约仍需指定卡与 cards.consume。
 
 ## 预约、消费与恢复
@@ -13,6 +13,7 @@
 - 创建预约保存原 creditId、账号摘要、唯一消费键、时间区及未来绝对时刻。指定卡在预约前过期或不可用时拒绝。
 - 到期原子领取一次；真正消费写入前复核原账号、原卡、授权、退出/休眠及同账号其他未决消费。
 - 第一张卡消费未决时，另一张预先预约的卡也停止；错过后标 missed，不以换卡或新幂等键绕过。
+- cardKey 绑定来源、账号及卡 ID；列表读取后账号变化，即使原始卡 ID 被复用也拒绝旧选择。既有预约保留旧 cardKey、原 creditId 和原消费键，不迁改或换键；新预约使用当前明确刷新的引用。
 - 取消只适用于 pending；running/uncertain 不能冒充成功取消。响应丢失保留原卡原键，显式核对确认可能完成原消费。
 - 休眠跨过预约立即 missed，即使迟到不足十秒；退出期间错过的预约启动后 missed，不补用。
 - 原卡原键返回 reset / nothingToReset / noCredit / alreadyRedeemed 分别保留；alreadyRedeemed 表示该原键已经成功完成，不换键重试。
@@ -28,6 +29,8 @@
 - REA 发送 handler 证据 ev_edc7216f6bb11e17c20735a1cdcb48a51ae0c0de3f77d0d69ba1d52c6cf43540；所选来源部分覆盖且保留 native integrity 差异，不代表完整应用审计或运行成功。
 
 ## 验证与待办
+
+- 实际新增只读报告：artifacts/stage5/real-readonly-once.json；首次报告保存失败保留于 first-read-report-failure.json。来源路径校验的过度转义已修正，新增 Windows/中文空格/异常路径和保存重启测试；卡引用的账号/来源隔离与旧记录兼容另有模块测试，最终 beta.10 安装及 runner 正在复验。
 
 - test/cards.test.ts 覆盖并发领取、持久幂等、响应丢失、原键核对、已有预约绕行、撤销、账号变化、短休眠及错过。
 - test/app-server-cards.test.ts 覆盖真实适配器的隔离模拟协议、写入边界、帧/总截止、账号变化和自有进程清理，不连接真实服务。

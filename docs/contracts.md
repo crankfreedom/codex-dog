@@ -150,7 +150,7 @@ codex-dog.exe mcp serve
 | TaskPolicy | priority=high/normal/low；expiresAt=null 或绝对时间；dailyWindow=全天或 HH:mm 起止 | 默认普通、无截止、全天；每日时段跟随本机时区，开始含结束不含，支持跨午夜，非全天起止不能相同 |
 | TaskAuthorization | 配置修订、目标、允许自动发送、累计上限、授权时刻 | 创建与开启时绑定当前身份及 Goal；仅客户端权限不足以代表此业务授权 |
 | DispatchAttempt | attemptId、taskId 可空、threadRef、marker、revision、state、slot、operationId | 单次发送与托管复用；slot=held/released；未决不能删除或重建绕过 |
-| ResetCardView | cardKey、title、status、expiresAt、idSuffix | 完整 creditId、账号指纹和服务端原始响应不进入公开结果 |
+| ResetCardView | cardKey、title、status、expiresAt、idSuffix | cardKey 是绑定来源、账号和卡 ID 的不透明引用；换账号或来源后旧选择失效。完整 creditId、账号指纹和服务端原始响应不进入公开结果；既有预约仍保留原引用/原卡/原消费键用于核对 |
 | ResetAppointmentInput | cardKey、scheduledAt、timeZone、明确消费授权 | scheduledAt 为未来绝对时间，timeZone 为有效 IANA 区名；已过期或当前不可用卡拒绝创建 |
 | Page | items、nextCursor、boundary | 默认 50 条、上限 200；cursor 为不透明值并绑定条件，事件/归档按稳定边界读取 |
 | OperationView | operationId、state、kind、resultRef、error、updatedAt | state=accepted/running/succeeded/failed/uncertain/cancelled；本地命令成功不等于远端业务目标完成 |

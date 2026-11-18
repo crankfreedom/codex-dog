@@ -14,7 +14,8 @@ export class CardService {
  async drain(){await this.running?.catch(()=>{});}
  resume(){const state=this.store.readAutomation();let changed=false;for(const item of state.appointments)if(item.state==='pending'&&Date.parse(item.scheduledAt)<=this.ports.now()){item.state='missed';item.reason='sleep_crossed_appointment';item.revision++;changed=true;}if(changed)this.store.commitAutomation(state.version,state);this.suspended=false;this.arm();}
  async close(){this.stopped=true;this.epoch++;this.timer?.();this.timer=undefined;await this.provider.close();await this.running?.catch(()=>{});}
- private view(){const snapshot=this.snapshot,stale=!snapshot||this.ports.now()-Date.parse(snapshot.observedAt)>30000;return {source:snapshot?.source??'unknown',observedAt:snapshot?.observedAt??null,stale,availability:!snapshot||stale||this.error?'unknown':'known',error:this.error,items:!snapshot?null:snapshot.cards.map(x=>({cardKey:this.ports.digest(x.id),title:x.title,status:x.status,expiresAt:x.expiresAt,idSuffix:x.id.slice(-4)}))};}
+ private cardKey(snapshot:CardObservation,id:string){return this.ports.digest(JSON.stringify(['reset-card-v1',snapshot.source,snapshot.accountBinding,id]));}
+ private view(){const snapshot=this.snapshot,stale=!snapshot||this.ports.now()-Date.parse(snapshot.observedAt)>30000;return {source:snapshot?.source??'unknown',observedAt:snapshot?.observedAt??null,stale,availability:!snapshot||stale||this.error?'unknown':'known',error:this.error,items:!snapshot?null:snapshot.cards.map(x=>({cardKey:this.cardKey(snapshot,x.id),title:x.title,status:x.status,expiresAt:x.expiresAt,idSuffix:x.id.slice(-4)}))};}
  async refresh(){try{const snapshot=await this.provider.read();if(!snapshot.verified||!snapshot.accountBinding||snapshot.cards.length>200)throw new AutomationError('PROVIDER_IDENTITY_UNAVAILABLE','无法确认卡片来源身份');this.snapshot=snapshot;this.error=null;return this.view();}catch(error){this.snapshot=undefined;this.error=error&&typeof error==='object'&&'code'in error?String(error.code):'PROVIDER_UNAVAILABLE';throw new AutomationError(this.error,'卡片读取失败，当前卡片未知');}}
  private event(item:Appointment,type:string){return {resourceId:item.id,at:new Date(this.ports.now()).toISOString(),type,reason:item.reason,revision:item.revision};}
  private async guard(item:Appointment,reconcile=false,epoch=this.epoch){
@@ -54,7 +55,7 @@ export class CardService {
    const state=this.store.readAutomation(),item=state.appointments.find(x=>x.id===p.id);if(!item||item.revision!==p.expectedRevision)throw new AutomationError('REVISION_CONFLICT','预约修订变化');if(item.state!=='pending')throw new AutomationError('OPERATION_IRREVERSIBLE','已领取或未决的消费不能取消');item.state='cancelled';item.reason='explicit';item.revision++;const result=commit(this.store,state,prior,appointmentView(item),this.event(item,operation));this.arm();return result;
   }
   const scheduled=Date.parse(String(p.scheduledAt));if(scheduled<=this.ports.now())throw new AutomationError('INVALID_ARGUMENT','预约必须在未来');
-  const observation=await this.provider.read(),card=observation.cards.find(x=>this.ports.digest(x.id)===p.cardKey);
+  const observation=await this.provider.read(),card=observation.cards.find(x=>this.cardKey(observation,x.id)===p.cardKey);
   if(observation.source==='live'&&!this.allowLive())throw new AutomationError('LIVE_EFFECTS_NOT_AUTHORIZED','请先明确选择允许真实指定卡消费的来源；每笔仍需授权');
   if(!observation.verified||!card||card.status!=='available'||card.expiresAt&&Date.parse(card.expiresAt)<=scheduled)throw new AutomationError('CARD_UNAVAILABLE','指定卡片不可用或将在预约前过期');
   await this.ports.authorize(actor,'cards.consume');await this.ports.authorize(actor,'cards.manage');if(this.stopped||scheduled<=this.ports.now())throw new AutomationError('APPOINTMENT_MISSED','读取期间预约已错过');
