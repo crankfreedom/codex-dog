@@ -2,7 +2,7 @@
 import { reactive, ref, onMounted } from 'vue';
 import { ElButton } from 'element-plus';
 import { useDesktop } from './store.ts';
-const store = useDesktop(); const form = reactive({ source: 'fixture', callerThreadId: '', pipe: '',cardExecutable:'',allowCardConsumption:false }); const message = ref(''); const busy = ref(false);
+const store = useDesktop(); const form = reactive({ source: 'fixture', callerThreadId: '', pipe: '',codexHome:'',legacyLockDirectory:'',cardExecutable:'',allowCardConsumption:false }); const message = ref(''); const busy = ref(false);
 onMounted(async () => { try { await store.readConfig(); Object.assign(form, store.config!.saved); } catch (cause) { message.value = (cause as Error).message; } });
 async function save() {
   busy.value = true; message.value = '';
@@ -17,6 +17,9 @@ async function save() {
     <template v-if="form.source === 'live-readonly'">
       <label>调用会话 ID<input v-model="form.callerThreadId" aria-label="调用会话 ID" placeholder="明确指定的 Codex 会话 UUID" /></label>
       <label>本机工具管道<input v-model="form.pipe" aria-label="本机工具管道" placeholder="留空仅在候选唯一时选择" /></label>
+      <label>目标元数据目录（可选）<input v-model="form.codexHome" aria-label="目标元数据目录" placeholder="明确指定 Codex home；留空沿用启动环境" /></label>
+      <label>旧版共享锁目录（可选）<input v-model="form.legacyLockDirectory" aria-label="旧版共享锁目录" placeholder="绝对路径；仅检查，不创建或回收锁" /></label>
+      <p class="muted">目录选择只提供只读检查位置；账号执行绑定、原发送回执和旧版崩溃恢复仍须独立核验。</p>
       <label>卡片明细来源（可选）<input v-model="form.cardExecutable" aria-label="卡片来源 Codex CLI" placeholder="明确指定本机 codex.exe 绝对路径；留空不读取卡片" /></label>
       <label><input v-model="form.allowCardConsumption" type="checkbox" aria-label="允许真实指定卡消费来源" />允许此来源用于真实指定卡消费（每笔仍需指定卡、时间和消费授权）</label>
       <p class="muted">多个实例时请填写明确管道。断连后不会改选其他实例。额度与连接状态来自当前桌面，只读查询不推进任务。</p>

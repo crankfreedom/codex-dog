@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {deliveryGateReport} from './delivery-gates.ts';
 import {storedTask,storedAttempt,storedAppointment} from './automation-storage.ts';
 import {taskConfigSchema} from './automation.ts';
 import {notificationValues} from './notifications.ts';
@@ -20,7 +21,7 @@ export const automationOutputs:Record<string,z.ZodType>={
  'threads.send':attempt,'attempts.get':attempt,'attempts.list':page(attempt),'attempts.reconcile':attempt,'tasks.reconcile':z.object({items:z.array(attempt)}).strict(),
  'queue.get':queue.extend({held:z.number().int().nonnegative(),items:z.array(task)}),'queue.configure':queue,'tasks.reorder':z.object({id,order:z.number().int().nonnegative(),queueRevision:revision}).strict(),
  'scheduler.settings.get':scheduler.extend({running:z.boolean()}),'scheduler.settings.update':scheduler,'scheduler.runNow':z.object({id,accepted:z.literal(true),kind:z.literal('scheduler.runNow')}).strict(),
- 'tasks.inspect':z.object({id,status:z.enum(['passed','blocked','unknown']),reasons:z.array(z.string()),providerChecked:z.boolean()}).strict(),
+ 'tasks.inspect':z.object({id,status:z.enum(['passed','blocked','unknown']),reasons:z.array(z.string()),providerChecked:z.boolean(),deliveryGates:deliveryGateReport.optional()}).strict(),
  'resetCards.list':z.object({source:z.enum(['unknown','fixture','live']),observedAt:z.string().datetime().nullable(),stale:z.boolean(),availability:z.enum(['unknown','known']),error:z.string().nullable(),items:z.array(z.object({cardKey:z.string(),title:z.string(),status:z.enum(['available','redeemed','redeeming','unknown']),expiresAt:z.string().datetime().nullable(),idSuffix:z.string()}).strict()).nullable()}).strict(),
  'resetAppointments.create':appointment,'resetAppointments.cancel':appointment,'resetAppointments.reconcile':appointment,'resetAppointments.list':page(appointment),
  'notifications.settings.get':notification,'notifications.settings.update':notification,

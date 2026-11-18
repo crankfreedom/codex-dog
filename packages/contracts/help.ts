@@ -6,7 +6,7 @@ export const helpTopics=[
   {id:'quota',title:'额度与只读刷新',text:'quota get 查询当前观察；quota refresh 显式刷新。观察三十秒过期，缺失、离线或未知不能当额度正常。额度自动刷新默认关闭，可在 monitoring 设置独立间隔，绝不调度任务。'},
   {id:'threads',title:'会话和 Goal 只读',text:'先明确连接，再分页读取会话身份和状态；选择目标读取详情和 Goal 元数据，不读取聊天正文或 Goal objective。unknown 与确认无 Goal 不同，跨源账号绑定未证实，不确认任务完成。'},
   {id:'settings',title:'设置、外观与临时预览',text:'settings get/update 仅支持 monitoring 和 appearance，分区独立修订，保存须 settings.manage、expectedRevision 和幂等键。预览不保存，离页或窗口隐藏后恢复已保存外观。'},
-  {id:'diagnostics',title:'诊断结果的含义',text:'diagnostics run 只读当前额度快照、连接、存储和明确目标。passed、blocked、unknown、not_checked 分开；未选择目标不假装检查成功，不刷新额度、不推进任务。'},
+  {id:'diagnostics',title:'诊断结果的含义',text:'diagnostics run 只读当前额度快照、连接、存储和明确目标。passed、blocked、unknown、not_checked 分开；未选择目标不假装检查成功，不刷新额度、不推进任务。可选 includeDeliveryGates=true 或桌面勾选检查真实发送门禁，使用无正文元数据；单项通过不授予发送，创建账号相同不等于执行绑定。'},
   {id:'history',title:'历史查询和安全导出',text:'历史只记录本应用实际运行/设置事实，不是聊天历史。events query 使用固定边界和绑定过滤条件的游标。events export 写固定 exports 目录的 JSONL，不覆盖已有文件；operations get/list/cancel 普通客户端限本人；可信桌面及 app.manage 可管理本用户全部导出。'},
   {id:'tasks',title:'任务与模板',text:'任务默认暂停且仅观察。自动模式必须单独批准目标、Goal、轮次、修订、次数和时段；模板变化不追改任务。提示词和模板正文读取须 content.read。暂停编辑后保持暂停、累计次数保留；未决投递阻断编辑、移除和重建。'},
   {id:'delivery',title:'调度与投递核对',text:'任务周期和额度只读周期独立。scheduler run-now 可能推进已授权任务；单次发送与托管共用意图、目标互斥、槽位和核对。提交、唯一回执、对应轮次结束、Goal 完成分别记录。结果不确定保留原意图，不自动补发。当前真实绑定及无正文回执未证实，真实发送阻断。'},

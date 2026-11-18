@@ -28,7 +28,7 @@ export class Stage3Registry {
           await this.authorize(actor,'settings.manage');const input=request.operation==='settings.update'?params:{...params,section:request.operation==='appearance.update'?'appearance':'monitoring'};
           const saved=this.settings.update(input,actor.clientId,request.idempotencyKey,()=>{});data={...saved};if(saved.section==='monitoring')this.monitor.configure(this.settings.get('monitoring').values as unknown as Monitoring);break;
         }
-        case 'diagnostics.run':data=await this.diagnostics.run(params.threadRef as Record<string,unknown>|undefined);break;
+        case 'diagnostics.run':data=await this.diagnostics.run(params.threadRef as Record<string,unknown>|undefined,params.includeDeliveryGates===true);break;
         case 'events.query':data=this.history.query(params);break;
         case 'events.subscribe':data=await this.history.subscribe(params,actor);break;
         case 'events.export':data=await this.history.export(params,actor,request.idempotencyKey);break;

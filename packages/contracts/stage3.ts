@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import {deliveryGateReport} from './delivery-gates.ts';
 
 export const themeIds = ['solid-1','solid-2','solid-3','solid-4','solid-5','solid-6','solid-7','solid-8','solid-9','solid-10','gradient-1','gradient-2','gradient-3','gradient-4','gradient-5','gradient-6','gradient-7','gradient-8','gradient-9','gradient-10'] as const;
 export const appearanceSchema = z.object({ theme: z.enum(themeIds), font: z.enum(['system','sans','serif','mono']), density: z.enum(['comfortable','compact']), contrast: z.enum(['standard','high']), titleSize: z.number().int().min(24).max(40), sectionSize: z.number().int().min(16).max(30), bodySize: z.number().int().min(12).max(24), captionSize: z.number().int().min(11).max(18), navSize: z.number().int().min(13).max(20), lineHeight: z.number().min(1.4).max(2.2) }).strict();
@@ -25,7 +26,7 @@ export const eventSubscribe = z.object({...historyFilter,limit:z.number().int().
 export const eventExport = z.object({...historyFilter,limit:z.number().int().min(1).max(20000).default(20000),output:z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}\.jsonl$/).optional()}).strict().refine(v=>!v.from||!v.to||Date.parse(v.from)<=Date.parse(v.to));
 export const operationRef = z.object({id:z.string().uuid()}).strict();
 const empty = z.object({}).strict();
-export const diagnosticInput = z.object({ threadRef:z.object({connectionId:z.string().uuid(),threadId:z.string().uuid()}).strict().optional() }).strict();
+export const diagnosticInput = z.object({ threadRef:z.object({connectionId:z.string().uuid(),threadId:z.string().uuid()}).strict().optional(),includeDeliveryGates:z.boolean().optional() }).strict();
 export const helpGet = z.object({ topic:z.enum(['overview','sources','pairing','quota','threads','settings','diagnostics','history','tasks','delivery','cards','notifications','updates','limits']).default('overview') }).strict();
 export const helpSearch = z.object({ query:z.string().trim().min(1).max(80),limit:z.number().int().min(1).max(20).default(10) }).strict();
 export const stage3Definitions = [
@@ -57,7 +58,7 @@ const operationOutput=z.object({id:z.string().uuid(),kind:z.literal('events.expo
 const businessOperationOutput=z.object({id:z.string().uuid(),kind:z.enum(['scheduler.runNow','updates.download','updates.install']),state:z.enum(['accepted','running','succeeded','failed','cancelled','awaiting_restart']),createdAt:z.string().datetime(),updatedAt:z.string().datetime(),error:z.string().nullable(),resultCount:z.number().int().nonnegative().nullable().optional(),expectedVersion:z.string().optional()}).strict();
 const anyOperationOutput=z.union([operationOutput,businessOperationOutput]);
 const topicOutput=z.object({id:z.string(),title:z.string(),text:z.string()}).strict();
-const diagnosticOutput=z.object({status:z.enum(['passed','blocked','unknown']),checks:z.array(z.object({id:z.string(),status:z.enum(['passed','blocked','unknown','not_checked']),reason:z.string().max(100),source:z.enum(['local','fixture','live'])}).strict()),mode:z.enum(['fixture','live-readonly']),source:z.enum(['fixture','live']),observedAt:z.string().datetime(),stale:z.literal(false),completionConfirmed:z.literal(false),readOnly:z.literal(true),hostState:z.string().optional()}).strict();
+const diagnosticOutput=z.object({status:z.enum(['passed','blocked','unknown']),checks:z.array(z.object({id:z.string(),status:z.enum(['passed','blocked','unknown','not_checked']),reason:z.string().max(100),source:z.enum(['local','fixture','live'])}).strict()),mode:z.enum(['fixture','live-readonly']),source:z.enum(['fixture','live']),observedAt:z.string().datetime(),stale:z.literal(false),completionConfirmed:z.literal(false),readOnly:z.literal(true),hostState:z.string().optional(),deliveryGates:deliveryGateReport.optional()}).strict();
 export const stage3Outputs:Record<string,z.ZodType>={
   'settings.get':settingOutput,'settings.update':settingOutput,'appearance.update':settingOutput,
   'appearance.get':z.object({section:z.literal('appearance'),revision,values:appearanceSchema,preview:z.object({id:z.string().uuid(),values:appearanceSchema}).strict().nullable().optional()}).strict(),

@@ -17,7 +17,7 @@ export interface AutomationStorePort {
   cursorKey():string;
 }
 export interface TargetObservation {binding:Binding;known:boolean;idle:boolean;approval:boolean;goalKnown:boolean;completionConfirmed:boolean;source:'fixture'|'live';reason:string}
-export interface AutomationPorts {now():number;newId():string;digest(value:string):string;authorize(actor:ActorRef,scope:AutomationScope):Promise<void>;observe(ref:Task['threadRef']):Promise<TargetObservation>;quota?():Promise<{available:boolean|null;stale:boolean}>;peekQuota?():{available:boolean|null;stale:boolean}}
+export interface AutomationPorts {now():number;newId():string;digest(value:string):string;authorize(actor:ActorRef,scope:AutomationScope):Promise<void>;observe(ref:Task['threadRef']):Promise<TargetObservation>;quota?():Promise<{available:boolean|null;stale:boolean}>;peekQuota?():{available:boolean|null;stale:boolean};deliveryGates?:(ref:Task['threadRef'])=>import('../../contracts/delivery-gates.ts').DeliveryGateReport}
 export interface DeliveryPorts extends AutomationPorts {
   quota():Promise<{available:boolean|null;stale:boolean}>;
   eligibility(ref:Task['threadRef']):Promise<{quotaError:boolean;latestTurnId:string|null;goalActive:boolean}>;

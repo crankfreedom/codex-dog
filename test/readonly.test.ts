@@ -25,6 +25,8 @@ function setup() {
   return { service, calls, provider, setQuota(v: unknown) { rawQuota = v; }, setThread(v: unknown) { rawThread = v; }, setGoal(v: GoalState) { goal = v; }, onRead(fn: (name: string) => void) { callback = fn; }, advance(ms: number) { now += ms; } };
 }
 const code = (expected: string) => (error: unknown) => error instanceof Error && 'code' in error && error.code === expected;
+
+test('账号内部观察不增加读取，时间回退/过期/断连不可作新鲜身份',async()=>{const f=setup();assert.equal(f.service.accountObservation().verified,false);await f.service.start();const reads=f.calls.length;assert.equal(f.service.accountObservation().stale,false);assert.equal(f.service.accountObservation().verified,true);assert.equal(f.calls.length,reads);f.advance(-1);assert.equal(f.service.accountObservation().stale,true);f.advance(30002);assert.equal(f.service.accountObservation().stale,true);f.service.close();assert.equal(f.service.accountObservation().verified,false);});
 test('真实服务构造不读；缓存只带脱敏额度，三十秒后过期不冒充可用', async () => {
   const f = setup(); assert.equal(f.calls.length, 0); await f.service.start(); const result = f.service.getQuota(); assert.equal(result.available, true); assert.equal(result.source, 'live'); assert(!JSON.stringify(result).includes('private-account')); const reads = f.calls.length;
   f.advance(30001); assert.equal(f.service.getQuota().stale, true); assert.equal(f.service.getQuota().available, null); assert.equal(f.calls.length, reads); f.service.close(); assert.throws(() => f.service.getQuota(), code('PROVIDER_UNAVAILABLE'));

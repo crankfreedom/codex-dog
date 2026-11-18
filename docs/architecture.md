@@ -170,3 +170,9 @@ M04 可写归档快照，M08 仅建立归档查询投影；M08 不被任务执�
 DispatchReceipt 不建立另一套未经核对的来源：M04 使用 P04 读取本应用持有 marker 的证据，区分提交响应、唯一回执匹配和对应轮次终态。第三方读取失败不会将 attempt 判成未发送。
 
 P10 已先登记 api-contract 文件协议，再以旧 src/store.ts 原始 FileJournal 与新 TargetLeaseAdapter 在隔离目录验证 SHA-256(threadId).lock、wx、pid/token 的双向及同时竞争。新适配器不自动回收遗留锁，避免旧 unlock 的读后删除竞争；自定义真实目录仍须明确核对，不以窗口存在性代替互斥。本次不共享运行库或真实锁目录、不建立实际运行时项目依赖，详见 [G03](g03.md)。
+
+## 发送门禁只读边界
+
+DeliveryGateService 依赖账号内存观察、TargetMetadata 和旧锁观察端口；worker 组装 CodexTargetMetadata/LegacyLockGate。模块不依赖 SQLite/文件系统，CLI/MCP/renderer 只持契约，不含该基础设施。diagnostics.run 显式启用门禁后走固定元数据投影，真实 tasks.inspect 复用该路径。
+
+CodexTargetMetadata 仅固定普通表/字段、SQLite authorizer 列白名单和连续采样；当前账号摘要及创建账号摘要只在内部比较，报告仅诊断码。真实 receipt 端口仍不可用，fixture 才接 assessUniqueReceipt。门禁不产生授权或持锁，不修改意图/计数/队列；任何单项通过均不能打开真实发送。来源目录、旧版恢复策略及协议残缺见[门禁记录](real-delivery-gates.md)。

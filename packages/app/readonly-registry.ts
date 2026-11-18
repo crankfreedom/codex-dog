@@ -10,6 +10,7 @@ export class ReadonlyRegistry {
   constructor(service: CodexReadonlyService, identity: RuntimeIdentity) { this.service = service; this.identity = identity; }
   async start() { await this.service.start(); }
   status() { return this.service.status(); }
+  accountObservation(){return this.service.accountObservation();}
   quota(){return this.service.getQuota();}
   async invoke(raw: unknown, scopes: readonly string[]): Promise<Response> {
     const parsed = requestSchema.safeParse(raw); if (!parsed.success) return failure('INVALID_ARGUMENT', '请求契约不兼容');

@@ -17,12 +17,15 @@ export class CodexReadonlyService {
   private lastError: string | null = null;
   private snapshot?: Record<string, unknown>;
   private refreshTask?: Promise<Record<string, unknown>>;
+  private accountObservedAt?: number;
   constructor(provider: CodexReadPort, goals: GoalReadPort, options: ReadonlyOptions) {
     this.provider = provider; this.goals = goals; this.options = options; this.connectionId = options.newId();
   }
   async start() { try { await this.refresh(); } catch (error) { this.lastError = error instanceof ReadError ? error.code : 'PROVIDER_UNAVAILABLE'; } }
   status() { return { connectionId: this.connectionId, revision: this.revision, source: this.options.source ?? 'live', state: this.poisoned ? 'identity_changed' : this.provider.connected() && this.fingerprint && !this.lastError ? 'ready' : 'unavailable', identityVerified: !!this.fingerprint && !this.poisoned && !this.lastError, goalAccountBindingVerified: false, reason: this.lastError, readOnly: true, readCalls: this.provider.audit?.() ?? {} }; }
   discover() { return this.provider.discover(); }
+  // Internal observation only. Never a target execution binding or public account identifier.
+  accountObservation() {const age=this.accountObservedAt===undefined?Infinity:this.options.now()-this.accountObservedAt;return{connectionId:this.connectionId,revision:this.revision,accountBinding:this.fingerprint??null,verified:!!this.fingerprint&&!this.poisoned&&!this.lastError&&this.provider.connected(),stale:age<0||age>30000};}
   private selection(connectionId: unknown) {
     if (connectionId !== this.connectionId) throw new ReadError('CONNECTION_IDENTITY_CHANGED', '连接实例已变化，请重新读取连接信息');
     if (this.poisoned) throw new ReadError('CONNECTION_IDENTITY_CHANGED', '账号身份已变化，须明确重新选择连接');
@@ -36,7 +39,7 @@ export class CodexReadonlyService {
       this.poisoned = true; this.revision++; this.snapshot = undefined; this.lastError = 'CONNECTION_IDENTITY_CHANGED';
       throw new ReadError('CONNECTION_IDENTITY_CHANGED', '桌面账号身份已变化，停止返回原连接数据');
     }
-    this.fingerprint = digest; this.lastError = null; return quota;
+    this.fingerprint = digest; this.accountObservedAt=this.options.now(); this.lastError = null; return quota;
   }
   private normalize(raw: unknown) {
     const quota = this.bind(raw);

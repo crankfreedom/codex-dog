@@ -75,6 +75,9 @@ jobs:
       - name: 验证阶段 3 设置、诊断和历史
         if: inputs.mode == 'preview'
         run: pnpm test:stage3 --installed
+      - name: 验证安装版发送门禁（模拟来源）
+        if: inputs.mode == 'preview'
+        run: pnpm test:delivery-gates --installed
       - name: 验证阶段 4/5 安装版任务、投递和卡片
         if: inputs.mode == 'preview'
         run: pnpm test:stage4 --installed
@@ -91,6 +94,7 @@ jobs:
             artifacts/g06/windows-preflight.json
             artifacts/stage2/**
             artifacts/stage3/**
+            artifacts/delivery-gates/**
             artifacts/stage4/**
           if-no-files-found: warn
           retention-days: 7

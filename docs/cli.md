@@ -159,3 +159,13 @@ codex-dog.exe updates check --json
 ~~~
 
 requestId 由客户端自动生成；--idempotency-key 对应 Request 元数据，不混入业务 params。创建请求必须绑定服务端验证的当前连接/Goal 身份，示例中的占位 ID 不代表有效授权或可直接执行数据。MCP 使用同一 Request 语义与幂等键约定，不重新实现状态机。
+
+## 发送门禁只读诊断
+
+~~~powershell
+codex-dog.exe diagnostics run --input gate.json --profile YOUR_PROFILE --json
+~~~
+
+gate.json 为 `{"includeDeliveryGates":true,"threadRef":{"connectionId":"明确连接 UUID","threadId":"明确目标 UUID"}}`；可省略 threadRef，目标项为未检查。MCP diagnostics_run 使用相同字段；桌面在只读诊断页勾选门禁检查。只需 read，界面不执行 CLI，CLI/MCP 不直接读取源数据库。
+
+来源页可保存明确 codexHome 和 legacyLockDirectory，下次启动生效；路径只提供检查位置，不能证明实际桌面/旧进程来源。报告中的单项通过不表示允许发送；真实发送始终关闭。详情见[门禁说明及所需条件](real-delivery-gates.md)。

@@ -236,3 +236,11 @@ threads.send 仅为显式单次发送，要求目标空闲、无审批/未结束
 - desktop.status/read 与 desktop.openDataDirectory/app.manage 为固定平台操作，无任意路径或命令。help.get/search 是包内静态说明例外，可在应用离线、未配对时读取；不返回宿主状态或业务缓存。
 - 数据库递增迁移保存设置/脱敏事件/导出操作，仍由 worker 唯一写入；既有 fixture_* 模拟事务与真实只读观察分开。配置和导出操作幂等记录有界，达到上限拒绝，不丢弃未决真值。
 - 新能力仅完成真实实现后注册；API major 3 保持，新增 settings.manage 权限为可选授权，旧客户端须使用配套能力目录，不把未来设计当已实现。
+
+## 真实发送门禁诊断增补（REQ-20261118-01）
+
+- diagnostics.run 的 includeDeliveryGates 为可选 boolean，默认 false，权限仍 read；返回可选 deliveryGates，包含 status、逐项 checks、source、observedAt、readOnly=true、realSendingEnabled=false。真实路径采用固定元数据列投影，跳过原会话/Goal API；不刷新额度。
+- tasks.inspect 在真实来源返回同一可选 deliveryGates；providerChecked=false 表示没有调用原实时会话读取。创建账号匹配和持久化轮次不改写业务授权，不解除真实发送阻断。
+- connections.configure/来源 DTO 新增可选 codexHome、legacyLockDirectory，最多 500 字符的本机绝对目录；空值沿用原缺省，不允许 UNC/设备路径。app.manage、修订、幂等和下次启动语义不变，fixture 清除真实参数。--codex-home 显式覆盖纳入 active/override。
+- FileSourceStore 单条配置请求 body 上限调整为 4096 字符，文件 4 MiB 上限同时用于加载和保存；保存超限不替换原文件。业务数据库无需迁移。
+- 门禁事实不含原账号摘要、marker、锁 token、聊天正文或 Goal objective；不接受客户端上传证明，也不增加人工 verified 放行。完整含义和外部条件见[真实发送门禁](real-delivery-gates.md)。
