@@ -14,6 +14,8 @@
 - updates configure 只配置当前发行身份的固定通道和自动只读检查；不自动下载或安装。desktop open-console 仅打开本应用诊断窗口。
 - 真实发送仍因账号/Goal、无正文回执及真实旧锁门禁阻断；模拟通过不代表真实副作用或正式发行通过。详见 stage4/stage5 记录。
 
+真实卡只读需明确选择本机 CLI 路径，例如 JSON 的 `cardExecutable: "C:/tools/codex.exe"`；路径可含中文/空格，支持 Windows 两种分隔符，不接受相对路径、UNC 或其他文件名。消费来源开关、cards.manage/cards.consume 与逐笔指定卡确认分别批准。cardKey 绑定来源及账号，使用当前明确刷新所得的引用；旧预约不换卡或换键。新增真实只读两次授权均已使用，真实消费当前由用户暂缓；验收脚本不构成新授权。
+
 ## 当前入口参数（阶段 3 历史签名）
 
 - 阶段 3 当前 42 项，API 3 / Schema 3：新增 settings.get/update、quota.policy.get/update、appearance.get/update/presets/preview/cancelPreview、diagnostics.run、events.query/export、operations.get/list/cancel、desktop.status/openDataDirectory、help.get/search；实现签名以能力目录为准，下方 82 项仍为最终设计。

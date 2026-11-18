@@ -8,20 +8,20 @@
 - 阶段 2/3、G01–G05 的历史通过只支持其当时范围。当前最终代码已完成本机/runner 回归及实际安装/升级，证据见阶段 6；真实副作用与可信签名仍未验。
 - 本机模块记录为 `artifacts/stage4/final-unit-tests.tap`；开发模拟记录为 `artifacts/stage4/development.json`。报告中 realMessageSends=0、realResetConsumptions=0，模拟写入次数另列。
 - 当前开发模拟已经贯通最新额度错误 → 自动投递 → 唯一回执 → 对应轮次/Goal 完成 → 归档；这不是账号/Goal 绑定、真实回执或真实锁门禁的证据。
-- 真实消息因账号/Goal 绑定、无正文唯一回执和真实旧锁目录未核对而阻断。指定卡 App Server 适配器已有实际 Schema 和隔离进程测试，尚未执行真实读取或消费。
+- 真实消息因账号/Goal 绑定、无正文唯一回执和真实旧锁目录未核对而阻断。指定卡 App Server 适配器已有实际 Schema 和隔离进程测试，真实只读已有一次有效报告，真实消费按用户选择暂缓。
 - 可信签名、签名后的升级/卸载器正例以及公开发行仍待相应条件和明确授权。所有未验证、部分覆盖和 skip 必须保留在最终阶段记录中。
 
 ## 本轮直接证据索引
 
-- 本机：163 项模块全通过、无 skip；beta.8 安装 4+9+8+10 组，升级/卸载/重装 5 组；独立定时器与原生通知另列。
-- runner：CI 44219468321、Preview 44219529625 success；模块 159 pass、4 旧源码测试 skip；阶段 4/5 安装 10 组。
+- 本机：167 项模块全通过、无 skip；beta.10 安装 4+9+8+10 组，升级/卸载/重装 5 组；独立定时器与原生通知另列。
+- runner：CI 44224371601、Preview 44224408068 success；模块 163 pass、4 旧源码测试 skip；阶段 4/5 安装 10 组。
 - 当前产物、逐报告路径/哈希、修复与未验项见 [阶段 6](stage6.md) 及本机 final-manifest.json。真实发送/卡消费为零。
 
 ## 需求功能基线
 
 | 功能 | 对应设计操作 | 实现位置与当前证据 | 尚须验收 |
 |---|---|---|---|
-| 实例发现、显式来源、重连 | C10–C12 | CodexReadonlyService、SourceConfiguration；阶段 2/3 历史与本轮来源测试 | 本机/runner 显式来源配置已复验；新卡真实来源尚未读取 |
+| 实例发现、显式来源、重连 | C10–C12 | CodexReadonlyService、SourceConfiguration；阶段 2/3 历史与本轮来源测试 | 本机/runner 显式来源配置已复验；新卡真实只读已取得一次有效报告；真实消费暂缓 |
 | 额度快照与剩余额度 | C13–C14 | QuotaService、CodexReadonlyService；只读历史证据、模块异常测试 | 当前最终安装及 runner 通过 |
 | 独立额度/任务检查计划 | C15–C16、C38–C40 | QuotaMonitor、SchedulerService；模块模拟、开发模拟 | 额度周期安装回归；任务周期另有实际十秒定时器记录 |
 | 会话分页与有界状态 | C17–C18 | ReadonlyRegistry；阶段 2/3 真实只读证据 | 当前最终安装模拟通过 |
@@ -34,7 +34,7 @@
 | 投递、回执与结果核对 | C20、C31、C33–C35 | 持久意图、held 槽、原 marker；响应丢失模块模拟和开发模拟 | 真实无正文唯一回执缺证据 |
 | 完成识别、自动和人工归档 | C27、C53–C54 | TaskService、SchedulerService、DeliveryService；开发模拟完整 Goal 链 | 最终安装模拟完成链通过；真实绑定未证实 |
 | 模板及默认模板 | C41–C46 | TemplateService；正文快照不追改、content.read 复核 | 最终 CLI/IPC/MCP 复制/删除/默认项通过 |
-| 指定卡片明细 | C47–C48 | CardService、FixtureCards、AppServerCards；模拟和实际 Schema | 真实只读尚未执行 |
+| 指定卡片明细 | C47–C48 | CardService、FixtureCards、AppServerCards；模拟和实际 Schema | 真实只读已有一次有效报告；真实消费暂缓 |
 | 指定卡预约、取消、消费和核对 | C49–C52 | CardService；原子领取、持久原键、错过不补用模块/开发模拟 | 真实消费对象和次数须另获授权 |
 | 只读诊断和阻断原因 | C32、C58 | DiagnosticsService、任务只读检查；不推进调度 | 最终三入口与模块状态快照通过 |
 | 历史、归档、时间线和导出 | C53–C57、C81 | HistoryService、任务投影；固定边界和有界订阅测试 | 固定边界模块与最终安装导出/取消/崩溃清理通过 |
@@ -62,7 +62,7 @@
 | help.search | C09 | 包内静态帮助 | 已实现；最终安装版离线帮助与页面搜索通过，不读取业务或创建 profile |
 | connections.discover | C10 | ReadonlyRegistry | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
 | connections.get | C11 | ReadonlyRegistry | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
-| connections.configure | C12 | SourceConfiguration | 已实现；显式保存下次启动、不自动切源；新卡来源真实只读仍未验 |
+| connections.configure | C12 | SourceConfiguration | 已实现；显式保存下次启动、不自动切源；合法卡路径及持久保存已验，新增真实卡只读一份有效报告 |
 | quota.get | C13 | QuotaService / CodexReadonlyService | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
 | quota.refresh | C14 | CodexReadonlyService | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
 | quota.policy.get | C15 | SettingsService / QuotaMonitor | 已实现；最终安装版与 runner 独立只读额度周期复验 |
@@ -88,8 +88,8 @@
 | attempts.reconcile | C35 | DeliveryService | 已实现；原意图核对与故障恢复安装模拟，真实无正文唯一回执缺证据 |
 | queue.get | C36 | SchedulerService | 已实现；三入口实际配置/读取，模块优先级/同级移动/降上限不抢占 |
 | queue.configure | C37 | SchedulerService | 已实现；三入口实际配置/读取，模块优先级/同级移动/降上限不抢占 |
-| scheduler.settings.get | C38 | SchedulerService | 已实现；独立周期默认关闭、保存不立即派发；本机 beta.8 实际十秒定时器验证 |
-| scheduler.settings.update | C39 | SchedulerService | 已实现；独立周期默认关闭、保存不立即派发；本机 beta.8 实际十秒定时器验证 |
+| scheduler.settings.get | C38 | SchedulerService | 已实现；独立周期默认关闭、保存不立即派发；本机 beta.10 实际十秒定时器验证 |
+| scheduler.settings.update | C39 | SchedulerService | 已实现；独立周期默认关闭、保存不立即派发；本机 beta.10 实际十秒定时器验证 |
 | scheduler.runNow | C40 | SchedulerService / DeliveryService | 已实现；本机/runner 自动任务模拟、持久操作核对，重启失败不重放 |
 | templates.list | C41 | TemplateService | 已实现；最终 CLI/IPC/MCP 复制/默认/删除/正文授权与快照不追改，原键复核 |
 | templates.get | C42 | TemplateService | 已实现；最终 CLI/IPC/MCP 复制/默认/删除/正文授权与快照不追改，原键复核 |
@@ -97,8 +97,8 @@
 | templates.update | C44 | TemplateService | 已实现；最终 CLI/IPC/MCP 复制/默认/删除/正文授权与快照不追改，原键复核 |
 | templates.delete | C45 | TemplateService | 已实现；最终 CLI/IPC/MCP 复制/默认/删除/正文授权与快照不追改，原键复核 |
 | templates.setDefault | C46 | TemplateService | 已实现；最终 CLI/IPC/MCP 复制/默认/删除/正文授权与快照不追改，原键复核 |
-| resetCards.list | C47 | CardService | 已实现；实际 Schema 与隔离进程协议、账号变化/超时/未知测试；真实来源尚未读取 |
-| resetCards.refresh | C48 | CardService / AppServerCards | 已实现；实际 Schema 与隔离进程协议、账号变化/超时/未知测试；真实来源尚未读取 |
+| resetCards.list | C47 | CardService | 已实现；实际 Schema 与隔离进程协议、账号变化/超时/未知测试；真实只读已取得一次有效报告；真实消费暂缓 |
+| resetCards.refresh | C48 | CardService / AppServerCards | 已实现；实际 Schema 与隔离进程协议、账号变化/超时/未知测试；真实只读已取得一次有效报告；真实消费暂缓 |
 | resetAppointments.list | C49 | CardService | 已实现；本机/runner 指定模拟卡领取/取消、短休眠错过、跨卡未决与重启恢复 |
 | resetAppointments.create | C50 | CardService | 已实现；本机/runner 指定模拟卡领取/取消、短休眠错过、跨卡未决与重启恢复 |
 | resetAppointments.cancel | C51 | CardService | 已实现；本机/runner 指定模拟卡领取/取消、短休眠错过、跨卡未决与重启恢复 |
@@ -149,7 +149,7 @@
 | 独立权限、配对和撤销 | A07 | access、access-store、channel、automation 测试；stage4 读者拒绝/撤销 | 最终安装配对/正文权限/独立新增权限及撤销通过，派发最终边界另测 |
 | 持久幂等与重连 | A08 | automation、delivery、cards、update 测试，stage4 原键重放 | 持久幂等、并发原键、重启与原结果核对模块/实际 worker 通过；真实副作用未验 |
 | 修订冲突和暂停编辑 | A09 | stage3、automation 测试及 stage4 暂停修订 | 暂停编辑、独立修订冲突与旧修订拒绝模块/安装三入口通过 |
-| 实例、身份和 Schema 变化 | A10 | readonly、app-server-cards 异常测试和显式来源 | 真实只读历史与当前隔离账号/Schema 异常通过；新卡真实来源仍未验 |
+| 实例、身份和 Schema 变化 | A10 | readonly、app-server-cards 异常测试和显式来源 | 真实只读历史与当前隔离账号/Schema 异常通过；真实卡只读已验；真实消费暂缓 |
 | 额度未知、预计时间和恢复 | A11 | readonly 缺窗口/过期测试，delivery 最终额度检查 | 模块未知/过期/最终额度复核及最终页面 blocked/unknown 通过；不按时间推断恢复 |
 | 只读查询与主动推进区分 | A12 | diagnostics、stage3 测试；stage4 显式 runNow 自动任务 | 只读诊断完整状态快照对照通过；实际 runNow 与实际十秒自动周期分别验证 |
 | Goal 只读和未知 | A13 | readonly 临时 SQLite 测试、真实只读历史 | Goal 指定字段只读证据保留；真实跨源账号绑定未证实，阻断真实自动化 |
@@ -164,8 +164,8 @@
 | 跨午夜、到期、时区和休眠 | A22 | delivery 本机时段边界、休眠失效处理 | 本机跨午夜/到期与模拟电源事件通过；真实系统休眠/时区切换未执行 |
 | 单次发送不得绕过托管 | A23 | DeliveryService 准入；stage4 合格空闲目标开发模拟 | 统一 DeliveryService 及模块准入、最终三入口模拟单次发送/原键不重放通过 |
 | 旧版锁兼容与未知持有者 | A24 | target-lease 原旧源码隔离互操作与竞争测试 | 本机原旧源码隔离互操作通过；runner 四项缺源码 skip；真实锁目录门禁未过 |
-| 指定卡唯一预约和原子领取 | A25 | cards 并发领取、账号变化、另一张已有预约阻断测试 | 模块并发原子领取/已有预约跨卡阻断及最终安装模拟通过；真实卡未验 |
-| 响应丢失原卡原键核对 | A26 | cards、app-server-cards 原键和四结果测试 | 实际 worker/隔离协议响应丢失、原卡原键核对和四结果通过；真实消费待授权 |
+| 指定卡唯一预约和原子领取 | A25 | cards 并发领取、账号变化、另一张已有预约阻断测试 | 模块并发原子领取/已有预约跨卡阻断及最终安装模拟通过；真实只读已验；真实消费暂缓 |
+| 响应丢失原卡原键核对 | A26 | cards、app-server-cards 原键和四结果测试 | 实际 worker/隔离协议响应丢失、原卡原键核对和四结果通过；真实消费按用户选择暂缓 |
 | 错过、短休眠和不可撤回 | A27 | cards 取消、错过、短休眠跨预约测试 | 模块取消/撤销/短休眠错过、实际模拟电源事件及退出重启通过；真实休眠未做 |
 | 模板不追改、修订暂停、分区独立 | A28 | automation、stage3 模块测试和 stage4 三入口模板快照 | 最终三入口模板复制/默认/删除/不追改、暂停编辑和独立分区通过 |
 | 固定边界、过滤和取消导出 | A29 | stage3、subscription 游标/慢客户端/撤销测试 | 固定任务/归档/修订/事件边界、过滤/慢订阅模块与最终安装导出/取消/崩溃清理通过 |

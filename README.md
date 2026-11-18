@@ -9,7 +9,7 @@ G01–G04 已完成：Electron 主应用、独立业务进程、统一业务入�
 全新 profile 默认 fixture；真实 live-readonly 须显式选择，来源保存下次启动生效。真实账号/Goal 绑定、无正文唯一回执与旧锁目录门禁未齐全，真实发送阻断；卡来源须显式指定本机 codex.exe，真实消费另需开启来源并逐笔授权。真实额度/会话/Goal 观察仍只留内存。
 G03 仅隔离锁验证，G04 仅真实只读观察；未发送消息或消费重置卡。G05 两版 NSIS 与真实 GitHub 更新已通过。G06 已新增发行配置、签名入口、只构建 Actions 和 Preview；远端 CI/Preview 的构建及实装已跑通，真实签名与正式发行未放行。
 
-最终候选为未签名 **0.6.0-beta.8 Preview**，安装器与已安装启动入口、哈希及本机/runner 报告见 [阶段 6 清单](docs/stage6.md)；使用变化见 [候选说明](docs/release-notes.md)。
+最终候选为未签名 **0.6.0-beta.10 Preview**，安装器与已安装启动入口、哈希及本机/runner 报告见 [阶段 6 清单](docs/stage6.md)；使用变化见 [候选说明](docs/release-notes.md)。
 
 ## 开发环境启动
 

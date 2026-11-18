@@ -26,12 +26,12 @@
 
 - test/automation.test.ts、delivery.test.ts、notifications.test.ts、subscription.test.ts 记录模块/事务/恢复/权限/时段/慢订阅证据。
 - scripts/stage4-smoke.mjs 默认隔离 fixture；先独立 SEA CLI 验证，再核对 IPC/MCP/页面、驻托盘及明确退出。
-- 本机最终 163 项模块测试通过、无 skip；新增构造无 IO、最终写入边界撤销/账号/额度/休眠、队列降上限、只读诊断快照、固定边界分页和长操作所有权/恢复核对。
-- 本机开发与最终 beta.8 安装模拟各 10 组通过，页面错误为空；模板复制/默认/删除、任务策略/修订/归档和独立配置也已实际经过 CLI/IPC/MCP。
+- 本机最终 167 项模块测试通过、无 skip；新增构造无 IO、最终写入边界撤销/账号/额度/休眠、队列降上限、只读诊断快照、固定边界分页和长操作所有权/恢复核对。
+- 本机开发与最终 beta.10 安装模拟各 10 组通过，页面错误为空；模板复制/默认/删除、任务策略/修订/归档和独立配置也已实际经过 CLI/IPC/MCP。
 - 本机原生通知 observed show=2、failed=0，固定文本核对通过；这是由模拟业务事件触发的真实 Windows 展示，不是实际账号的额度恢复证明。
-- scripts/stage4-scheduler-smoke.mjs 在 beta.8 安装版以两个实际十秒周期自行完成模拟派发、回执/Goal 核对和归档；manualRunNowCalls=0，保存周期不立即发送，关闭周期明确保留。报告为 artifacts/stage4/scheduler-timer.json，仅本机实跑。
-- artifacts/stage4/development.json、installed.json、final-unit-tests.tap 分别保存本机证据；远端 CI 44219468321 与 Preview 44219529625 已成功，安装版 10 组报告的 CRC 已独立核对。
-- runner 163 项中 159 pass、4 skip：干净 runner 无相邻旧源码，保留隔离旧源码互操作跳过；本机对应四项通过不等于真实旧锁目录核对。
+- scripts/stage4-scheduler-smoke.mjs 在 beta.10 安装版以两个实际十秒周期自行完成模拟派发、回执/Goal 核对和归档；manualRunNowCalls=0，保存周期不立即发送，关闭周期明确保留。报告为 artifacts/stage4/scheduler-timer.json，仅本机实跑。
+- artifacts/stage4/development.json、installed.json、final-unit-tests.tap 分别保存本机证据；远端 CI 44224371601 与 Preview 44224408068 已成功，安装版 10 组报告的 CRC 已独立核对。
+- runner 167 项中 163 pass、4 skip：干净 runner 无相邻旧源码，保留隔离旧源码互操作跳过；本机对应四项通过不等于真实旧锁目录核对。
 - 所有失败、未验证项和缺少的签名/真实副作用正例继续保留，不把当前模块通过当作整个产品验收通过。
 
 ## 真实来源的实际阻断
