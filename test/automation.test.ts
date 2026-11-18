@@ -12,6 +12,8 @@ import type { AutomationPorts } from '../packages/modules/automation/ports.ts';
 import { automationDefinitions } from '../packages/contracts/automation.ts';
 import {DatabaseSync} from 'node:sqlite';
 import {definitions,describe} from '../packages/contracts/protocol.ts';
+import {OperationService} from '../packages/modules/operations/service.ts';
+import {SchedulerService} from '../packages/modules/scheduler/service.ts';
 const actor={kind:'external' as const,clientId:randomUUID(),revision:1};
 function setup(fault?:(stage:string)=>void){const dir=mkdtempSync(join(tmpdir(),'dog-automation-'));const store=new SqliteStore(join(dir,'data.sqlite'),fault);store.start();const granted=new Set(['read','tasks.manage']);const ports:AutomationPorts={now:()=>Date.parse('2026-11-17T00:00:00Z'),newId:randomUUID,digest:x=>createHash('sha256').update(x).digest('hex'),authorize:async(_actor,scope)=>{if(!granted.has(scope))throw new AutomationError('PERMISSION_DENIED','缺少授权');},observe:async()=>({binding:{connectionRevision:1,accountBinding:'fixture',goalId:null,latestTurnId:'turn'},known:true,idle:true,approval:false,goalKnown:true,completionConfirmed:false,source:'fixture',reason:'fixture'})};return {dir,store,granted,ports,templates:new TemplateService(store,ports),tasks:new TaskService(store,ports),close:()=>{store.close();rmSync(dir,{recursive:true,force:true});}};}
 function params(name:string,p:unknown){return automationDefinitions.find(x=>x.operation===name)!.input.parse(p) as Record<string,unknown>;}
@@ -56,3 +58,25 @@ test('新增能力均有输出Schema、条件权限和唯一三入口映射',()=
  const names=new Set<string>(),tools=new Set<string>(),commands=new Set<string>();for(const definition of definitions){assert(!names.has(definition.operation));assert(!tools.has(definition.tool));assert(!commands.has(definition.command.join(' ')));names.add(definition.operation);tools.add(definition.tool);commands.add(definition.command.join(' '));if(/^(tasks|templates|attempts|archives|timelines|queue|scheduler|reset|notifications)\b/.test(definition.operation)||definition.operation==='threads.send')assert(describe(definition.operation)!.outputSchema);}
  assert.deepEqual(describe('resetAppointments.create')!.scopes,['cards.manage','cards.consume']);assert(describe('tasks.get')!.conditionalScopes.some(x=>x.scopes.includes('content.read')));
 });
+
+test('任务与归档游标固定创建/归档边界，后续新增不混入旧分页且跨查询、篡改均拒绝',async()=>{const f=setup();try{
+ const create=async(key:string)=>f.tasks.invoke('tasks.create',params('tasks.create',{threadRef:{connectionId:randomUUID(),threadId:randomUUID()},prompt:'隔离分页正文'}),actor,key);
+ const tasks=[];for(let i=0;i<5;i++)tasks.push(await create('task-'+i));
+ const first=await f.tasks.invoke('tasks.list',{limit:2},actor);assert(first.nextCursor);assert((first.items as Array<Record<string,unknown>>).every(x=>x.prompt===null));
+ const later=await create('later');const second=await f.tasks.invoke('tasks.list',{limit:2,cursor:first.nextCursor},actor),third=await f.tasks.invoke('tasks.list',{limit:2,cursor:second.nextCursor},actor);
+ assert.deepEqual([first,second,third].flatMap(x=>(x.items as Array<Record<string,unknown>>).map(v=>v.id)),tasks.map(x=>x.id));assert.equal(third.nextCursor,null);assert.equal(first.boundary,third.boundary);
+ await assert.rejects(f.tasks.invoke('archives.list',{cursor:first.nextCursor},actor),{code:'INVALID_ARGUMENT'});await assert.rejects(f.tasks.invoke('tasks.list',{cursor:String(first.nextCursor)+'x'},actor),{code:'INVALID_ARGUMENT'});
+ for(const task of tasks)await f.tasks.invoke('tasks.remove',{id:task.id,expectedRevision:1},actor,'remove-'+task.id);
+ const archived=await f.tasks.invoke('archives.list',{limit:2},actor);await f.tasks.invoke('tasks.remove',{id:later.id,expectedRevision:1},actor,'remove-later');
+ let cursor=archived.nextCursor,ids=(archived.items as Array<Record<string,unknown>>).map(x=>x.id);while(cursor){const next=await f.tasks.invoke('archives.list',{limit:2,cursor},actor);ids.push(...(next.items as Array<Record<string,unknown>>).map(x=>x.id));cursor=next.nextCursor;}
+ assert.deepEqual(ids,tasks.map(x=>x.id));assert.equal(new Set(ids).size,5);
+ }finally{f.close();}});
+
+test('长操作只向本人或管理者展示，撤销后原键也拒绝，重启将中断调度标失败而不重放',async()=>{const f=setup();let scheduled=0,dispatched=0;try{
+ const state=f.store.readAutomation(),at=new Date(f.ports.now()).toISOString(),accepted=randomUUID(),running=randomUUID(),other=randomUUID();
+ for(const [id,owner,status] of [[accepted,actor.clientId,'accepted'],[running,actor.clientId,'running'],[other,'another-client','running']] as const)state.backgroundOperations.push({id,owner,kind:'scheduler.runNow',state:status,createdAt:at,updatedAt:at,error:null,resultCount:null});f.store.commitAutomation(state.version,state);
+ const operations=new OperationService(f.store,f.ports);assert.equal(operations.list(actor,100).length,2);assert.equal(operations.list({...actor,canManageOperations:true},100).length,3);await assert.rejects(operations.invoke('operations.get',{id:other},actor),{code:'OPERATION_NOT_FOUND'});
+ const cancelled=await operations.invoke('operations.cancel',{id:accepted},actor,'cancel');assert.equal(cancelled.state,'cancelled');assert(!('owner'in cancelled));assert.deepEqual(await operations.invoke('operations.cancel',{id:accepted},actor,'cancel'),cancelled);
+ await assert.rejects(operations.invoke('operations.cancel',{id:running},actor,'too-late'),{code:'OPERATION_IRREVERSIBLE'});f.granted.delete('tasks.manage');await assert.rejects(operations.invoke('operations.cancel',{id:accepted},actor,'cancel'),{code:'PERMISSION_DENIED'});
+ const scheduler=new SchedulerService(f.store,f.ports,{send:async()=>{dispatched++;return {};},reconcile:async()=>({})},()=>{scheduled++;return()=>{};});scheduler.start();assert.equal((await operations.invoke('operations.get',{id:running},actor)).error,'PROCESS_INTERRUPTED');assert.equal((await operations.invoke('operations.get',{id:accepted},actor)).state,'cancelled');await scheduler.close();assert.equal(scheduled,0);assert.equal(dispatched,0);
+ }finally{f.close();}});

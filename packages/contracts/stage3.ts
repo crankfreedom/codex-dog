@@ -44,7 +44,7 @@ export const stage3Definitions = [
   {operation:'events.export',command:['events','export'],tool:'events_export',description:'在固定 exports 目录导出有界 JSONL，不覆盖文件，支持取消。',input:eventExport,scope:'read',readOnly:false},
   {operation:'operations.get',command:['operations','get'],tool:'operations_get',description:'查询授权范围内的历史导出操作，不透传模块内部状态。',input:operationRef,scope:'read',readOnly:true},
   {operation:'operations.list',command:['operations','list'],tool:'operations_list',description:'查询本人导出；可信桌面及 app.manage 可核对本机全部导出。',input:z.object({limit:z.number().int().min(1).max(100).default(20)}).strict(),scope:'read',readOnly:true},
-  {operation:'operations.cancel',command:['operations','cancel'],tool:'operations_cancel',description:'取消授权范围内的导出；已完成操作不能撤回。',input:operationRef,scope:'read',readOnly:false},
+  {operation:'operations.cancel',command:['operations','cancel'],tool:'operations_cancel',description:'取消授权范围内尚可撤回的导出、调度或更新操作；已开始的不可撤回动作会明确拒绝。',input:operationRef,scope:'read',readOnly:false},
   {operation:'desktop.status',command:['desktop','status'],tool:'desktop_status',description:'读取本应用窗口、托盘及平台支持状态。',input:empty,scope:'read',readOnly:true},
   {operation:'desktop.openDataDirectory',command:['desktop','open-data-directory'],tool:'desktop_open_data_directory',description:'仅打开本应用当前 profile 的固定目录。',input:empty,scope:'app.manage',readOnly:false},
   {operation:'help.get',command:['help','get'],tool:'help_get',description:'读取包内静态说明；离线可用，不返回业务状态。',input:helpGet,scope:'public',readOnly:true},

@@ -47,3 +47,37 @@ test('队列槽位非抢占、仅观察无意图计数，同一旧额度错误�
 test('跨午夜本机时段开始含结束不含，时段外及到期不发送',()=>{
  const config=taskConfigSchema.parse({prompt:'模拟',dailyWindow:{allDay:false,start:'22:00',end:'06:00'}});const local=(h:number,m=0)=>new Date(2026,10,17,h,m).getTime();assert.equal(inWindow(config,local(21,59)),false);assert.equal(inWindow(config,local(22)),true);assert.equal(inWindow(config,local(5,59)),true);assert.equal(inWindow(config,local(6)),false);assert.equal(inWindow({...config,expiresAt:new Date(local(23)).toISOString()},local(23)),false);
 });
+
+test('最终写入边界重新检查撤销、账号、额度错误和休眠世代，确定未写入才释放计数',async t=>{
+ const changes:Record<string,(f:ReturnType<typeof setup>)=>void>={
+  revoked:f=>f.revoke(),
+  account:f=>{const observe=f.ports.observe;f.ports.observe=async ref=>{const value=await observe(ref);return {...value,binding:{...value.binding,accountBinding:'changed'}};};},
+  eligibility:f=>{f.ports.eligibility=async()=>({quotaError:false,latestTurnId:'turn-1',goalActive:false});},
+  quota:f=>{f.ports.quota=async()=>({available:null,stale:true});},
+  suspend:f=>{f.delivery.stopNew();f.delivery.resume();}
+ };
+ for(const [name,change] of Object.entries(changes))await t.test(name,async()=>{const f=setup();try{
+  const task=await f.tasks.invoke('tasks.create',{threadRef:f.ref,prompt:'隔离边界验证',mode:'auto',enabled:true,authorization:{allowAutomaticSend:true,connectionRevision:1,expectedLatestTurnId:'turn-1',expectedGoalId:null}},actor,'create');
+  const dispatch=f.ports.dispatch;f.ports.dispatch=async(attempt,guard)=>{assert.equal(f.store.readAutomation().attempts[0]!.state,'dispatching');change(f);return dispatch(attempt,guard);};
+  const result=await f.delivery.send(String(task.id),{taskId:task.id},actor,'send','scheduler.dispatch');assert.equal(result.state,'cancelled_before_write');assert.equal(result.slot,'released');assert.equal(f.writes(),0);assert.equal(f.store.readAutomation().tasks[0]!.resumeCount,0);
+ }finally{await f.close();}});
+});
+
+test('优先级与同级移动不抢占在途，降低并发上限保留全部 held，空槽按新顺序派发',async()=>{const f=setup();try{
+ await f.scheduler.invoke('queue.configure',{expectedRevision:1,enabled:true,limit:2},actor,'limit-two');
+ const create=async(key:string,priority:string)=>f.tasks.invoke('tasks.create',{threadRef:{...f.ref,threadId:randomUUID()},prompt:'隔离队列',mode:'auto',priority,enabled:true,authorization:{allowAutomaticSend:true,connectionRevision:1,expectedLatestTurnId:'turn-1',expectedGoalId:null}},actor,key);
+ const low=await create('low','low'),first=await create('first','high'),second=await create('second','high');
+ await f.scheduler.invoke('tasks.reorder',{id:second.id,direction:'up',expectedQueueRevision:2},actor,'move');
+ await assert.rejects(f.scheduler.invoke('tasks.reorder',{id:first.id,direction:'up',expectedQueueRevision:2},actor,'stale-move'),{code:'REVISION_CONFLICT'});
+ await f.scheduler.tick();assert.deepEqual(f.store.readAutomation().attempts.map(x=>x.taskId),[second.id,first.id]);assert.equal(f.writes(),2);
+ const next=await create('next','high');await f.scheduler.invoke('queue.configure',{expectedRevision:3,enabled:true,limit:1},actor,'limit-one');await f.scheduler.tick();assert.equal(f.writes(),2);assert.equal(f.store.readAutomation().attempts.filter(x=>x.slot==='held').length,2);
+ const finished=new Set<string>();f.ports.receipt=async attempt=>({matched:finished.has(attempt.id),turnId:finished.has(attempt.id)?'sent-turn':null,turnFinished:finished.has(attempt.id),goalComplete:false});
+ finished.add(f.store.readAutomation().attempts[0]!.id);await f.scheduler.tick();assert.equal(f.writes(),2);
+ finished.add(f.store.readAutomation().attempts[1]!.id);await f.scheduler.tick();assert.equal(f.writes(),3);assert.equal(f.store.readAutomation().attempts[2]!.taskId,next.id);assert.equal(f.store.readAutomation().tasks.find(x=>x.id===low.id)!.resumeCount,0);
+ }finally{await f.close();}});
+
+test('任务诊断仅读取额度快照和目标，不刷新额度、不改授权、事件、计数或调度状态',async()=>{const f=setup();try{
+ const task=await f.tasks.invoke('tasks.create',{threadRef:f.ref,prompt:'隔离观察',mode:'observe'},actor,'create');
+ f.ports.quota=async()=>{throw new Error('不允许诊断刷新额度');};f.ports.peekQuota=()=>({available:true,stale:false});
+ const before=f.store.readAutomation();const result=await f.scheduler.invoke('tasks.inspect',{id:task.id},actor);assert.equal(result.status,'blocked');assert.deepEqual(result.reasons,['paused']);assert.equal(result.providerChecked,true);assert.deepEqual(f.store.readAutomation(),before);assert.equal(f.writes(),0);
+ }finally{await f.close();}});

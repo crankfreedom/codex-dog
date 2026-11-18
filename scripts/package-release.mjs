@@ -28,7 +28,7 @@ try {
   await command(process.execPath, ['scripts/build.mjs'], { DOG_BUILD_VERSION: policy.version });
   await command(process.execPath, ['scripts/pack-cli.mjs'], { DOG_CLI_OUTPUT: cli });
   await cp('out', join(app, 'out'), { recursive: true });
-  await writeFile(join(app, 'package.json'), JSON.stringify({ name: 'codex-dog-' + policy.mode, version: policy.version, productName: policy.productName, main: 'out/main.cjs', description: 'Codex Dog 只读桌面；默认模拟，可显式选择真实只读', author: 'crankfreedom', private: true, dependencies: {} }));
+  await writeFile(join(app, 'package.json'), JSON.stringify({ name: 'codex-dog-' + policy.mode, version: policy.version, productName: policy.productName, main: 'out/main.cjs', description: 'Codex Dog 任务托管与自动化管理；默认模拟，真实来源与副作用须明确授权', author: 'crankfreedom', private: true, dependencies: {} }));
   await writeFile(join(resources, 'dog-distribution.json'), JSON.stringify(policy.manifest));
   await build({ targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), publish: 'never', config: {
     appId: policy.appId, productName: policy.productName, executableName: policy.executableName,
