@@ -18,6 +18,8 @@
 - CLI/MCP 关闭窗口后可查询，明确退出后离线，本实例宿主清理通过；未保存原始响应、账号/Goal 标识、聊天正文或 objective，仅保留目标摘要与固定诊断码。
 - 同目录的 simulated-adapter 报告使用隔离 SQLite/命名管道，不能充当真实绑定、真实回执或真实旧锁证据。模块测试和安装/runner 结果分别登记，失败及 skip 保留。
 
+- 真实自动化观察入口在任何会话读取之前返回 TARGET_BINDING_UNVERIFIED；未取得源端无正文实时状态/执行绑定前，即使仅观察的创建/启用也不调用旧 read_thread 路径。模拟适配器与安装只读验收断言拒绝请求不写任务，原生读取仍只有额度一次。
+
 ## 上游协议仍缺的证明
 
 - 已安装 CLI 的 `turn/start` Schema 支持可选 `clientUserMessageId`，本地 history 有 `first_user_item_id`；这是可能的关联基础，不证明桌面发送工具接受并持久保存原 marker，也不证明原调用唯一对应目标 turn。当前桌面发送成功只返回 threadId，不采用“最新 turn”或时间邻近猜测。

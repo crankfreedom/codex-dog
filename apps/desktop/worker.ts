@@ -68,6 +68,7 @@ const deliveryGates=new DeliveryGateService({source:mode==='fixture'?'fixture':'
 const pendingAuthorization=new Map<string,{resolve:()=>void;reject:(error:Error)=>void;timer:NodeJS.Timeout}>();
 const authorize=(actor:ActorRef,scope:AutomationScope='read')=>new Promise<void>((resolve,reject)=>{const id=randomUUID();const timer=setTimeout(()=>{pendingAuthorization.delete(id);reject(new Stage3Error('AUTH_REVOKED','权限复核未完成，取消操作'));},2000);pendingAuthorization.set(id,{resolve,reject,timer});parent.postMessage({type:'authorize',id,actor,scope});});
 const automationPorts:AutomationPorts={now:Date.now,newId:randomUUID,digest:value=>createHash('sha256').update(value).digest('hex'),authorize,observe:async ref=>{
+  if(live)throw new AutomationError('TARGET_BINDING_UNVERIFIED','真实自动化缺少源端无正文实时状态与执行绑定，停止目标读取');
   const service=live??fixtureReadonly!;const result=await service.invoke({apiVersion,requestId:randomUUID(),operation:'threads.get',params:ref},['read']);
   if(!result.ok)throw new AutomationError(result.error.code,'目标核验失败');
   const data=result.data,goal=data.goal as {availability:string;current:{id:string;status:string}|null},turn=data.latestTurn as {id:string;status:string}|null;
