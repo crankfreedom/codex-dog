@@ -2,13 +2,13 @@
 
 ## 口径和证据分界
 
-- 需求：REQ-20261117-05；本表对应阶段 4–6 的当前实现快照，不表示本轮总验收完成。
+- 需求：REQ-20261117-05 / REQ-20261118-01；本表对应阶段 4–6 的当前实现快照，不表示本轮总验收完成。
 - 当前能力目录为 83 项、API major 3、SQLite Schema 11。C01–C82 均有对应处理器，另有读取已保存来源的 connections.configuration；数量不是验收结论。
 - 「已实现」指存在公开契约及唯一处理器；「模块模拟」指隔离端口、数据库或进程模拟测试；「开发模拟」指本机开发版 CLI/IPC/MCP/页面的实际运行记录。
 - 阶段 2/3、G01–G05 的历史通过只支持其当时范围。当前最终代码已完成本机/runner 回归及实际安装/升级，证据见阶段 6；真实副作用与可信签名仍未验。
-- 本机模块记录为 `artifacts/stage4/final-unit-tests.tap`；开发模拟记录为 `artifacts/stage4/development.json`。报告中 realMessageSends=0、realResetConsumptions=0，模拟写入次数另列。
+- 当前本机模块记录为 `artifacts/delivery-gates/unit-tests.tap`，原 167 项记录留作历史；开发模拟记录为 `artifacts/stage4/development.json`。报告中 realMessageSends=0、realResetConsumptions=0，模拟写入次数另列。
 - 当前开发模拟已经贯通最新额度错误 → 自动投递 → 唯一回执 → 对应轮次/Goal 完成 → 归档；这不是账号/Goal 绑定、真实回执或真实锁门禁的证据。
-- 真实消息因账号/Goal 绑定、无正文唯一回执和真实旧锁目录未核对而阻断。指定卡 App Server 适配器已有实际 Schema 和隔离进程测试，真实只读已有一次有效报告，真实消费按用户选择暂缓。
+- 真实消息因当前执行账号/Goal 绑定和源端无正文完整持久唯一回执缺证据而阻断；旧工具目前由用户确认没有托管，未计旧版实际兼容正例。指定卡 App Server 适配器已有实际 Schema 和隔离进程测试，真实只读已有一次有效报告，真实消费按用户选择暂缓。
 - 可信签名、签名后的升级/卸载器正例以及公开发行仍待相应条件和明确授权。所有未验证、部分覆盖和 skip 必须保留在最终阶段记录中。
 
 ## 本轮直接证据索引
@@ -62,7 +62,7 @@
 | help.search | C09 | 包内静态帮助 | 已实现；最终安装版离线帮助与页面搜索通过，不读取业务或创建 profile |
 | connections.discover | C10 | ReadonlyRegistry | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
 | connections.get | C11 | ReadonlyRegistry | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
-| connections.configure | C12 | SourceConfiguration | 已实现；显式保存下次启动、不自动切源；合法卡路径及持久保存已验，新增真实卡只读一份有效报告 |
+| connections.configure | C12 | SourceConfiguration | 已实现；显式保存下次启动、不自动切源；codexHome/旧锁目录只读选择、卡路径和持久上限已验，新增真实卡只读一份有效报告 |
 | quota.get | C13 | QuotaService / CodexReadonlyService | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
 | quota.refresh | C14 | CodexReadonlyService | 已实现；真实只读历史与当前本机/runner 安装模拟通过，未知与断连不回退 |
 | quota.policy.get | C15 | SettingsService / QuotaMonitor | 已实现；最终安装版与 runner 独立只读额度周期复验 |
@@ -82,7 +82,7 @@
 | tasks.policy.get | C29 | TaskService | 已实现；模块修订/分页/非抢占与最终 CLI/IPC/MCP 策略、修订、移动、归档实跑 |
 | tasks.revisions.list | C30 | TaskService | 已实现；模块修订/分页/非抢占与最终 CLI/IPC/MCP 策略、修订、移动、归档实跑 |
 | tasks.reconcile | C31 | DeliveryService | 已实现；实际 worker 模拟恢复、原意图核对与安装升级后不补发 |
-| tasks.inspect | C32 | SchedulerService 只读检查 | 已实现；模块完整状态快照证明不刷新/不改业务，最终 CLI 与页面诊断实跑 |
+| tasks.inspect | C32 | SchedulerService 只读检查 | 已实现；模块完整快照证明不刷新/不改业务，模拟 CLI/页面实跑；真实路径复用固定元数据门禁，不调用会话接口 |
 | attempts.list | C33 | DeliveryService | 已实现；提交/回执/轮次/槽位脱敏投影，共享签名游标与固定上界，最终安装读取 |
 | attempts.get | C34 | DeliveryService | 已实现；提交/回执/轮次/槽位脱敏投影，共享签名游标与固定上界，最终安装读取 |
 | attempts.reconcile | C35 | DeliveryService | 已实现；原意图核对与故障恢复安装模拟，真实无正文唯一回执缺证据 |
@@ -108,7 +108,7 @@
 | events.query | C55 | HistoryService | 已实现；当前安装版/runner 固定边界查询、JSONL 导出、撤销/崩溃清理 |
 | events.export | C56 | HistoryService | 已实现；当前安装版/runner 固定边界查询、JSONL 导出、撤销/崩溃清理 |
 | timelines.get | C57 | TaskService | 已实现；实际三入口时间线，模块资源绑定与固定签名边界分页 |
-| diagnostics.run | C58 | DiagnosticsService / HostRouter | 已实现；当前安装版/runner 只读诊断与任务阻断检查，真实只读历史保留 |
+| diagnostics.run | C58 | DiagnosticsService / HostRouter | 已实现；beta.13 安装/runner 门禁六组，CLI/IPC/MCP/页面一致；本机真实只读六组，门禁 blocked |
 | settings.get | C59 | SettingsService | 已实现；当前本机/runner 阶段 3 安装回归，分区修订与预览撤销保持 |
 | settings.update | C60 | SettingsService | 已实现；当前本机/runner 阶段 3 安装回归，分区修订与预览撤销保持 |
 | appearance.get | C61 | SettingsService / AppearancePreview | 已实现；当前本机/runner 阶段 3 安装回归，分区修订与预览撤销保持 |
@@ -163,7 +163,7 @@
 | 非抢占队列和仅观察 | A21 | delivery 队列/仅观察测试，SchedulerService 排序 | 非抢占、仅观察、优先级、同级移动及降上限保留 held 模块与实际队列操作通过 |
 | 跨午夜、到期、时区和休眠 | A22 | delivery 本机时段边界、休眠失效处理 | 本机跨午夜/到期与模拟电源事件通过；真实系统休眠/时区切换未执行 |
 | 单次发送不得绕过托管 | A23 | DeliveryService 准入；stage4 合格空闲目标开发模拟 | 统一 DeliveryService 及模块准入、最终三入口模拟单次发送/原键不重放通过 |
-| 旧版锁兼容与未知持有者 | A24 | target-lease 原旧源码隔离互操作与竞争测试 | 本机原旧源码隔离互操作通过；runner 四项缺源码 skip；真实锁目录门禁未过 |
+| 旧版锁兼容与未知持有者 | A24 | target-lease 原旧源码隔离互操作与竞争测试 | 本机原旧源码隔离互操作通过；runner 原四项及新增旧 unlock 复现共五项缺源码 skip；用户确认旧工具没有托管，不计真实并行兼容正例 |
 | 指定卡唯一预约和原子领取 | A25 | cards 并发领取、账号变化、另一张已有预约阻断测试 | 模块并发原子领取/已有预约跨卡阻断及最终安装模拟通过；真实只读已验；真实消费暂缓 |
 | 响应丢失原卡原键核对 | A26 | cards、app-server-cards 原键和四结果测试 | 实际 worker/隔离协议响应丢失、原卡原键核对和四结果通过；真实消费按用户选择暂缓 |
 | 错过、短休眠和不可撤回 | A27 | cards 取消、错过、短休眠跨预约测试 | 模块取消/撤销/短休眠错过、实际模拟电源事件及退出重启通过；真实休眠未做 |
@@ -190,6 +190,8 @@
 
 ## 发送门禁补充证据（2026-11-18）
 
-- C12/C19/C20/C35 与 A13/A19/A24 的新增证据见[真实门禁](real-delivery-gates.md)和[旧锁核验](legacy-lock-gate.md)。只读真实目标创建账号匹配/Goal 关联/持久轮次已观察，当前执行账号绑定、源端唯一回执和旧版实际恢复策略仍未通过。
+- C12/C19/C20/C32/C35/C58 与 A13/A19/A24 的新增证据见[真实门禁](real-delivery-gates.md)和[旧锁核验](legacy-lock-gate.md)。只读真实目标创建账号匹配/Goal 关联/持久轮次已观察，当前执行账号绑定、源端唯一回执和旧版实际恢复策略仍未通过。
 - 固定列投影、未知来源/过期、同名 view/生成字段、损坏/链接/并发替换、旧桌面死 PID 回收、原标识唯一回执及入口一致性分别测试。模拟来源即使 API 模式为 live-readonly 也标为 simulated-adapter，不充当真实门禁。
 - 当前真实发送/卡消费仍为零；签名和公开发行状态不变。新增门禁没有增加公开能力数、权限或数据库 Schema。
+
+- beta.13 最终本机 191 pass/0 skip，runner 186 pass/5 skip；NSIS 4、阶段 2/3/4–5 的 9/9/10、门禁 6 及升级 5 组。本机真实只读门禁流程六组通过且真实发送仍关闭，旧工具不托管的用户条件另记，最终清单见阶段 6。
