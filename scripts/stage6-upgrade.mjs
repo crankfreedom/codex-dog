@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
-import {readFile,writeFile,mkdir,access} from 'node:fs/promises';
-import {join,resolve} from 'node:path';
+import {readFile,writeFile,mkdir,access,readdir} from 'node:fs/promises';
+import {join,resolve,sep} from 'node:path';
 import {currentSchema} from '../packages/infrastructure/sqlite-store.ts';
 import {DatabaseSync} from 'node:sqlite';
 import {launchSmokeHost} from './electron-smoke-host.mjs';
@@ -34,7 +34,8 @@ try{
  await installPackage(to.installer);await launch(to.version);assert.equal(good(await ipc('app.version')).schemaVersion,currentSchema);const afterAttempt=good(await ipc('attempts.get',{id:attempt.id})),afterTask=good(await ipc('tasks.get',{id:task.id})),afterCard=good(await ipc('resetAppointments.list')).items.find(x=>x.id===appointment.id);
  assert.equal(afterAttempt.state,'uncertain');assert.equal(afterAttempt.slot,'held');assert.equal(afterTask.resumeCount,1);assert.equal(afterCard.state,'uncertain');assert.equal(afterCard.calls,1);await quit();
  const after=snapshot();assert.equal(after.schema,currentSchema);assert.equal(after.markerDigest,before.markerDigest);assert.equal(after.consumeKeyDigest,before.consumeKeyDigest);assert.equal(after.receipts,1);assert.equal(after.consumed,1);mark('两版 NSIS 原位升级迁移并保留未决发送/卡消费、原 marker/消费键/次数/held，重启未增加模拟外部写入');
- await launch(to.version);good(await ipc('tasks.reconcile',{id:task.id},'upgrade-reconcile'));assert.equal(good(await ipc('attempts.get',{id:attempt.id})).slot,'released');assert.equal(good(await ipc('resetAppointments.reconcile',{id:appointment.id,confirmMayComplete:true},'upgrade-card-reconcile')).state,'succeeded');await quit();const reconciled=snapshot();assert.equal(reconciled.receipts,1);assert.equal(reconciled.consumed,1);mark('升级后原回执和原卡原键核对，不补发/换键，历史租约在终态受控释放');
+ assert(install.startsWith(root+sep));const uninstaller=(await readdir(install,{withFileTypes:true})).find(x=>x.isFile()&&/^Uninstall .+\.exe$/i.test(x.name));assert(uninstaller);assert.equal((await command(join(install,uninstaller.name),['/S'])).code,0);await until(async()=>{try{await access(join(install,to.executable));return false;}catch{return true;}},'隔离 Preview 未卸载');const retained=snapshot();assert.deepEqual(retained,after);mark('实际未签名 NSIS 卸载移除应用，保留 profile 及未决原意图/原卡原键；不将其算作签名卸载正例');
+ await installPackage(to.installer);await launch(to.version);good(await ipc('tasks.reconcile',{id:task.id},'upgrade-reconcile'));assert.equal(good(await ipc('attempts.get',{id:attempt.id})).slot,'released');assert.equal(good(await ipc('resetAppointments.reconcile',{id:appointment.id,confirmMayComplete:true},'upgrade-card-reconcile')).state,'succeeded');await quit();const reconciled=snapshot();assert.equal(reconciled.receipts,1);assert.equal(reconciled.consumed,1);mark('重装后原回执和原卡原键核对，不补发/换键，历史租约在终态受控释放');
  let historicalMigration='not-provided';const historical=option('--historical-installer');
  if(historical){
   // A second profile is selected before launching the historical binary; no old product data is read.
@@ -43,5 +44,5 @@ try{
   const inspect=new DatabaseSync(join(migrationDirectory,'codex-dog.sqlite'),{readOnly:true});assert.equal(inspect.prepare('PRAGMA user_version').get().user_version,3);inspect.close();
   await installPackage(to.installer);({desktop,page}=await launchSmokeHost({executablePath:join(install,to.executable),args:[`--profile=${migrationProfile}`,'--source=fixture'],env,timeout:60000},'migration-new-'+id,undefined,root));await page.waitForFunction(()=>document.getElementById('health')?.textContent?.includes('running'));assert.equal(good(await ipc('app.version')).schemaVersion,currentSchema);assert.equal(good(await ipc('appearance.get')).values.bodySize,19);assert.equal(good(await ipc('tasks.list')).items.length,0);const status=good(await ipc('app.status'));good(await ipc('app.quit',{expectedInstanceId:status.instanceId,confirm:true},randomUUID()));await until(()=>!alive(status.workerPid),'迁移新版未退出');await desktop.close().catch(()=>{});desktop=undefined;historicalMigration='schema-3-to-'+currentSchema;mark('历史阶段 3 真实安装版 Schema 3 升至当前 Schema，设置保留且未伪造旧业务数据');
  }
- const report={result:'passed',evidence:'fixture-installation',from:from.version,to:to.version,schema:currentSchema,profile,installDirectory:install,checks,originalKeysPreserved:true,replayedMessages:0,replayedCardConsumptions:0,fixtureMessageWrites:1,fixtureCardConsumptions:1,realMessageSends:0,realResetConsumptions:0,historicalMigration,uncertaintyInjection:'offline-isolated-production-store-after-simulated-remote-commit',signedUpgradeVerified:false,createdAt:new Date().toISOString()};await writeFile(join(root,'upgrade-report.json'),JSON.stringify(report,null,2));
+ const report={result:'passed',evidence:'fixture-installation',from:from.version,to:to.version,schema:currentSchema,profile,installDirectory:install,checks,originalKeysPreserved:true,unsignedUninstallKeepsUnresolved:true,replayedMessages:0,replayedCardConsumptions:0,fixtureMessageWrites:1,fixtureCardConsumptions:1,realMessageSends:0,realResetConsumptions:0,historicalMigration,uncertaintyInjection:'offline-isolated-production-store-after-simulated-remote-commit',signedUpgradeVerified:false,createdAt:new Date().toISOString()};await writeFile(join(root,'upgrade-report.json'),JSON.stringify(report,null,2));
 }finally{await desktop?.close().catch(()=>{});}

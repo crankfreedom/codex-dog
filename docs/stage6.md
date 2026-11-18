@@ -2,43 +2,55 @@
 
 ## 当前状态
 
-- 需求：REQ-20261117-05；2026-11-18 仍在验收，未完成完整 G06 或公开发行。
-- 复用既有 UpdateService、NSIS、GitHub Actions 和物理安装前签名门禁；没有另建安装/更新后台。
-- 当前 83 项能力、API 3 / SQLite Schema 11；整包统一版本，CLI 内置 Node，窗口关闭驻托盘、明确退出停止端点及本实例进程。
-- 正式 SVG/PNG/七尺寸 ICO 已生成、视觉检查并接入桌面/托盘/安装器。
-- 更新页提供固定候选、下载进度、操作核对与独立安装确认；更新配置仅自动只读检查，下载/安装逐次确认。
+- REQ-20261117-05，2026-11-18：不依赖签名的工程、安装/升级和远端 CI/Preview 已完成本轮验证；完整 G06 与 Goal 不标记完成。
+- 复用 UpdateService、NSIS、GitHub Actions 和物理安装门禁；83 项能力、API 3 / SQLite Schema 11，正式 SVG/PNG/七尺寸 ICO 已接入桌面、托盘和安装器。
+- 更新页接入固定候选、进度、操作核对与独立安装确认；自动策略只读检查，不自动下载或安装。Preview 无官方更新清单。
+- 用户决定先不配置签名；签名相关正例保留待办，真实副作用及公开发行继续逐项明确授权。
 
-## 安装与升级验证
+## 最终候选与安装入口
 
-| 环境与产物 | 当前证据 | 状态 |
+| 项目 | 本机候选 |
+|---|---|
+| 版本 / 构建标识 | 0.6.0-beta.8 / 1a00c389，未签名 Preview |
+| 安装器 | release/g06/preview/0.6.0-beta.8/1a00c389/Codex-Dog-Preview-0.6.0-beta.8-Setup.exe |
+| 字节数 | 142796577 |
+| SHA-512（base64） | tqEMX8vRDHU0Gr2b1MBRVEqKvDsrErSfYwQWX2YID9Pl/ombKOaP9wShE/HW3Ut7OZBOzeXd8awvZfV3Uo19hg== |
+| 已安装主程序 | artifacts/g06/installed/1a00c389/CodexDogPreview.exe |
+| 配套 CLI / MCP | 同目录 resources/cli/codex-dog.exe；内置 Node，MCP 使用 mcp serve |
+| 默认数据 | %LOCALAPPDATA%/codex-dog/profiles/g06-preview-1a00c389，fixture |
+
+以上路径相对项目根目录；可审阅完整清单为 artifacts/stage6/final-manifest.json，发行说明见 [候选说明](release-notes.md)。本机与 runner 独立打包，不假定安装包哈希相同。中间 beta.5/.6/.7 产物及其报告保留，不替代最终 beta.8。
+
+## 验证结果与证据
+
+| 环境 | 结果 | 证据 |
 |---|---|---|
-| 本机 Preview beta.5 / 567d0838 | NSIS 4 组、阶段 4/5 安装模拟 8 组、页面错误为空 | 已通过该包范围 |
-| 本机 Preview beta.6 / b273bc25 | 安装包已构建，作为中间产物保留 | 未作为最终包验收 |
-| 本机 Preview beta.7 / 9a89eb45 | 最终代码构建中 | 待安装验收 |
-| 新业务两版 NSIS 升级 | scripts/stage6-upgrade.mjs：旧安装版实际创建业务，离线隔离注入未决后升级；固定 marker/卡键/计数/held 和无重放核对 | 待执行 |
-| 历史阶段 3 Schema 3 安装迁移 | 同脚本可显式输入已有 beta.4 安装器，以新隔离 profile 保留旧设置升级 | 待执行 |
-| 远端 CI / Preview | 当前工作流已加入阶段 4/5 页面和故障验收及报告收集 | 待本轮运行 |
+| 本机模块与检查 | 163/163 pass，0 skip；构建、边界、文档、发行检查通过 | artifacts/stage4/final-unit-tests.tap |
+| 本机 beta.8 NSIS | 4 组通过，主应用/worker/SEA CLI 同版本，未签名真实拒绝负例通过 | artifacts/g06/preview-report.json |
+| 本机安装版阶段 2/3/4–5 | 9 / 8 / 10 组通过，页面错误为空；关闭驻托盘、明确退出清理、离线不拉起 | artifacts/stage2、stage3、stage4/installed.json |
+| Windows 原生通知 | 实际 show=2、failed=0，固定文本 | stage4 安装报告；模拟业务事件，非真实额度恢复 |
+| 本机实际任务周期 | 两个十秒周期自行完成模拟投递、原回执与 Goal 归档，未调用 runNow；配置不立即发送、关闭生效 | artifacts/stage4/scheduler-timer.json，仅本机 |
+| 中文空格独立 CLI | 安装版 SEA EXE 在中文空格路径、空 PATH 下查询中文离线帮助及业务离线码通过，不创建 profile | artifacts/stage6/unicode-cli.json |
+| 新业务升级 / 卸载 / 重装 | beta.5 Schema 10→beta.8 Schema 11，未决原意图/键/次数/held 保留，无重放；未签名卸载保留 profile，重装后原结果核对 | artifacts/stage6/upgrade-report.json，5 组 |
+| 历史本应用升级 | beta.4 Schema 3→11，外观设置保留，不伪造旧业务数据 | 同升级报告中的独立隔离 profile |
+| 远端 CI | [44219468321](https://github.com/crankfreedom/codex-dog/actions/runs/44219468321) success，G03/G02 12/20 组及阶段 2/3/4–5 9/8/10 组 | artifacts/stage6/remote-ci-44219468321 |
+| 远端 Preview | [44219529625](https://github.com/crankfreedom/codex-dog/actions/runs/44219529625) success，beta.8；实际安装 4+9+8+10 组 | artifacts/stage6/remote-preview-44219529625/summary.json |
 
-安装包、版本、字节数和 SHA-512 由 artifacts/g06/package.json 登记；该文件是本机产物，不随源码发布。最终清单和验收结果只在实际观察后更新。
+远端两类运行的模块计数均为 163：159 pass、4 skip、0 fail。四项跳过因 runner 无旧项目源码；本机对应隔离测试通过，真实旧锁目录仍未核对。Preview 按模式跳过签名环境审批检查，不表示该门禁通过。远端 JSON 通过认证 ZIP 范围读取、长度及 CRC32 核对；未完整下载远端安装器到本机验哈希或再安装。早期失败、修复和剩余未验项保存在 artifacts/stage6/failures-and-pending.json。
 
-## 升级安全边界
+## 数据与生命周期安全
 
-- 安装前停止新派发、等待本地在途落定、一致备份；物理安装前再次核验哈希/授权/签名。准备失败恢复观察，不偷偷补跑预约。
-- 备份包含 WAL 已提交状态，原发送 marker、槽位、累计次数、原卡和原消费键持续保留。prepared/dispatching 中断保守 uncertain。
-- Schema 10→11 将来源显式保存：只有本应用持久模拟回执能证明 fixture；缺证据为 unknown 并阻断执行，不按当前来源猜历史。
-- 不删除未知锁，不以退出或升级当作远端未执行；对应终态且原持有者退出、锁身份匹配才受控释放。
-- 跨通道、同版/降级、损坏包和未知发布者继续拒绝；当前 Preview 无官方更新清单，不承诺自动回滚。
+- 更新准备停止新派发、等待本地在途落定并一致备份；物理安装前再次核验哈希/授权/签名，准备失败恢复观察。
+- 升级试验先由旧实际安装版业务创建意图、原键及模拟回执，再在离线隔离库注入响应结算丢失；这是故障注入，不冒充真实网络丢包。
+- Schema 11 仅以本应用持久模拟回执证明 fixture；无证据为 unknown，不按当前来源猜历史，不自动重放。
+- 未决锁跨退出保留；只在对应终态、原持有者退出且 token/pid 匹配时受控释放，不删除未知锁。
+- 实际系统休眠/时区切换未执行；模块时段与模拟电源事件证据单列，不扩大为真实机器测试。
 
-## 签名与公开发行
+## 仍未完成的验收
 
-- 本机签名配置字段均缺失，当前用户证书库未发现代码签名证书，GitHub 仓库变量/秘密列表为空；仅核对存在性，未读取/输出密钥。
-- 未购买服务、创建/替换密钥或以自签证书替代可信正例。真实发布者、有效链、时间戳、升级/卸载器正例仍未验收。
-- 无签名 Preview 的真实拒绝负例不等于可信签名正例；安装器哈希只用于一致性。
-- 所有构建 publish=never；没有创建标签、stable 或新公开 Release。公开发布须在最终包、清单、证据和发行说明可审阅后请求明确批准。
-- 真实发送与卡消费另走本轮具体授权及门禁，不随安装或 CI 自动开放。
+- 可信签名暂不配置：发布者、有效链、时间戳、签名升级及签名卸载器正例均待办，不用自签代替。完整 G06 未过。
+- 真实发送：账号/目标/Goal 绑定、无正文唯一回执和真实旧锁证据仍缺；当前保持阻断，授权不能代替门禁。
+- 新卡来源真实读取、指定卡消费及原键核对未执行；必须先完成真实来源只读核验，再列具体卡、动作、次数及影响申请消费授权，不人为耗尽额度。
+- 所有报告真实发送/卡消费为零；所有构建 publish=never，没有创建标签、stable 或新公开 Release。公开发布只在清单与证据可审阅后另行批准。
 
-## 操作说明
-
-- 开发入口：先 build，再 start；安装入口、配套 CLI 和实际目录以最终安装清单为准。
-- 备份、未决处理、损坏配置及故障恢复见 [恢复手册](recovery.md)；逐项功能与验收见 [覆盖表](coverage.md)。
-- 验证结束必须更新阶段记录、计划与项目档案，执行 learner → logger 和 node .ai/check-bounds.mjs；未完成条件不得写成全部通过。
+接入见 [CLI/MCP](cli.md)，备份及故障恢复见 [恢复手册](recovery.md)，逐项功能与验收见 [覆盖表](coverage.md)。项目档案按 learner → logger 更新，并运行根工作区 node .ai/check-bounds.mjs；不将未验条件改成全部完成。
