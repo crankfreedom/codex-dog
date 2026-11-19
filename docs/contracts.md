@@ -244,3 +244,5 @@ threads.send 仅为显式单次发送，要求目标空闲、无审批/未结束
 - connections.configure/来源 DTO 新增可选 codexHome、legacyLockDirectory，最多 500 字符的本机绝对目录；空值沿用原缺省，不允许 UNC/设备路径。app.manage、修订、幂等和下次启动语义不变，fixture 清除真实参数。--codex-home 显式覆盖纳入 active/override。
 - FileSourceStore 单条配置请求 body 上限调整为 4096 字符，文件 4 MiB 上限同时用于加载和保存；保存超限不替换原文件。业务数据库无需迁移。
 - 门禁事实不含原账号摘要、marker、锁 token、聊天正文或 Goal objective；不接受客户端上传证明，也不增加人工 verified 放行。完整含义和外部条件见[真实发送门禁](real-delivery-gates.md)。
+
+桌面投递参数准备补充（REQ-20261118-02）：启用自动任务和显式发送页面先经同一 diagnostics.run(includeDeliveryGates=true) 读取来源门禁；当前只允许明确 fixture 来源继续读取模拟会话。真实、未知或不兼容报告在 threads.get 之前停止，不向真实来源发送，也不以页面输入代替业务授权。底层 tasks.enable/threads.send 仍保留独立最终校验；CLI/MCP 契约、权限及能力数量不变。

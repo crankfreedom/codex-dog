@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {onMounted,ref} from 'vue';import {ElButton} from 'element-plus';import {useDesktop} from './store.ts';
+import {onMounted,ref} from 'vue';
+import {readSubmissionObservation} from './submission-observation.ts';import {ElButton} from 'element-plus';import {useDesktop} from './store.ts';
 const store=useDesktop(),error=ref(''),busy=ref(false),queue=ref<Record<string,any>>({}),scheduler=ref<Record<string,any>>({}),attempts=ref<Record<string,any>[]>([]),queueEnabled=ref(false),limit=ref(1),scheduleEnabled=ref(false),pollSeconds=ref(15),connectionId=ref(''),threadId=ref(''),prompt=ref(''),confirm=ref(false);
 const notifications=ref<Record<string,any>>({}),notifyEnabled=ref(false),notifyAllDay=ref(true),notifyStart=ref('09:00'),notifyEnd=ref('22:00');
 async function run(work:()=>Promise<void>){if(busy.value)return;busy.value=true;error.value='';try{await work();}catch(e){error.value=(e as Error).message;}finally{busy.value=false;}}
@@ -8,7 +9,7 @@ onMounted(()=>void run(async()=>{connectionId.value=String((await store.request(
 async function saveQueue(){await run(async()=>{await store.request('queue.configure',{expectedRevision:queue.value.revision,enabled:queueEnabled.value,limit:limit.value},crypto.randomUUID());await load();});}
 async function saveSchedule(){await run(async()=>{await store.request('scheduler.settings.update',{expectedRevision:scheduler.value.revision,enabled:scheduleEnabled.value,pollSeconds:pollSeconds.value},crypto.randomUUID());await load();});}
 async function tick(){await run(async()=>{await store.request('scheduler.runNow',{},crypto.randomUUID());await load();});}
-async function send(){await run(async()=>{if(!confirm.value)throw new Error('请明确确认本次目标和消息发送');const threadRef={connectionId:connectionId.value,threadId:threadId.value},observed=await store.request('threads.get',threadRef);await store.request('threads.send',{threadRef,prompt:prompt.value,connectionRevision:observed.connectionRevision,expectedLatestTurnId:(observed.latestTurn as any)?.id??null,confirm:true},crypto.randomUUID());confirm.value=false;await load();});}
+async function send(){await run(async()=>{if(!confirm.value)throw new Error('请明确确认本次目标和消息发送');const threadRef={connectionId:connectionId.value,threadId:threadId.value},observed=await readSubmissionObservation(store.request,threadRef);await store.request('threads.send',{threadRef,prompt:prompt.value,connectionRevision:observed.connectionRevision,expectedLatestTurnId:(observed.latestTurn as any)?.id??null,confirm:true},crypto.randomUUID());confirm.value=false;await load();});}
 async function reconcile(id:string){await run(async()=>{await store.request('attempts.reconcile',{id},crypto.randomUUID());await load();});}
 async function reorder(id:string,direction:string){await run(async()=>{await store.request('tasks.reorder',{id,direction,expectedQueueRevision:queue.value.revision},crypto.randomUUID());await load();});}
 async function saveNotifications(){await run(async()=>{await store.request('notifications.settings.update',{expectedRevision:notifications.value.revision,patch:{enabled:notifyEnabled.value,dailyWindow:notifyAllDay.value?{allDay:true}:{allDay:false,start:notifyStart.value,end:notifyEnd.value}}},crypto.randomUUID());await load();});}
