@@ -2,11 +2,11 @@
 
 ## 口径和证据分界
 
-- 需求：REQ-20261117-05 / REQ-20261118-01；本表对应阶段 4–6 的当前实现快照，不表示本轮总验收完成。
+- 需求：REQ-20261117-05 / REQ-20261118-01 / REQ-20261119-01；本表对应阶段 4–6 的当前实现快照，不表示本轮总验收完成。
 - 当前能力目录为 83 项、API major 3、SQLite Schema 11。C01–C82 均有对应处理器，另有读取已保存来源的 connections.configuration；数量不是验收结论。
 - 「已实现」指存在公开契约及唯一处理器；「模块模拟」指隔离端口、数据库或进程模拟测试；「开发模拟」指本机开发版 CLI/IPC/MCP/页面的实际运行记录。
 - 阶段 2/3、G01–G05 的历史通过只支持其当时范围。当前最终代码已完成本机/runner 回归及实际安装/升级，证据见阶段 6；真实副作用与可信签名仍未验。
-- 当前本机模块记录为 `artifacts/delivery-gates/unit-tests.tap`，原 167 项记录留作历史；开发模拟记录为 `artifacts/stage4/development.json`。报告中 realMessageSends=0、realResetConsumptions=0，模拟写入次数另列。
+- 当前本机模块记录为 `artifacts/delivery-gates/unit-tests-guard.tap`，原 167 项记录留作历史；开发模拟记录为 `artifacts/stage4/development.json`。报告中 realMessageSends=0、realResetConsumptions=0，模拟写入次数另列。
 - 当前开发模拟已经贯通最新额度错误 → 自动投递 → 唯一回执 → 对应轮次/Goal 完成 → 归档；这不是账号/Goal 绑定、真实回执或真实锁门禁的证据。
 - 真实消息因当前执行账号/Goal 绑定和源端无正文完整持久唯一回执缺证据而阻断；旧工具目前由用户确认没有托管，未计旧版实际兼容正例。指定卡 App Server 适配器已有实际 Schema 和隔离进程测试，真实只读已有一次有效报告，真实消费按用户选择暂缓。
 - 可信签名、签名后的升级/卸载器正例以及公开发行仍待相应条件和明确授权。所有未验证、部分覆盖和 skip 必须保留在最终阶段记录中。
@@ -108,7 +108,7 @@
 | events.query | C55 | HistoryService | 已实现；当前安装版/runner 固定边界查询、JSONL 导出、撤销/崩溃清理 |
 | events.export | C56 | HistoryService | 已实现；当前安装版/runner 固定边界查询、JSONL 导出、撤销/崩溃清理 |
 | timelines.get | C57 | TaskService | 已实现；实际三入口时间线，模块资源绑定与固定签名边界分页 |
-| diagnostics.run | C58 | DiagnosticsService / HostRouter | 已实现；beta.13 安装/runner 门禁六组，CLI/IPC/MCP/页面一致；本机真实只读六组，门禁 blocked |
+| diagnostics.run | C58 | DiagnosticsService / HostRouter | 已实现；beta.14 安装/runner 模拟门禁八组，CLI/IPC/MCP/页面一致；本机真实只读六组，门禁 blocked |
 | settings.get | C59 | SettingsService | 已实现；当前本机/runner 阶段 3 安装回归，分区修订与预览撤销保持 |
 | settings.update | C60 | SettingsService | 已实现；当前本机/runner 阶段 3 安装回归，分区修订与预览撤销保持 |
 | appearance.get | C61 | SettingsService / AppearancePreview | 已实现；当前本机/runner 阶段 3 安装回归，分区修订与预览撤销保持 |
@@ -194,4 +194,6 @@
 - 固定列投影、未知来源/过期、同名 view/生成字段、损坏/链接/并发替换、旧桌面死 PID 回收、原标识唯一回执及入口一致性分别测试。模拟来源即使 API 模式为 live-readonly 也标为 simulated-adapter，不充当真实门禁。
 - 当前真实发送/卡消费仍为零；签名和公开发行状态不变。新增门禁没有增加公开能力数、权限或数据库 Schema。
 
-- beta.13 最终本机 191 pass/0 skip，runner 186 pass/5 skip；NSIS 4、阶段 2/3/4–5 的 9/9/10、门禁 6 及升级 5 组。本机真实只读门禁流程六组通过且真实发送仍关闭，旧工具不托管的用户条件另记，最终清单见阶段 6。
+- beta.14 最终本机 195 pass/0 skip，runner 190 pass/5 skip；NSIS 4、阶段 2/3/4–5 的 9/9/10、模拟门禁 8 及升级 5 组。本机真实只读门禁流程六组通过且真实发送仍关闭，旧工具不托管的用户条件另记，最终清单见阶段 6。
+
+- REQ-20261119-01：beta.13 隔离管道复现桌面先读取会话；beta.14 以统一诊断门禁保护自动任务启用和单次发送参数准备，模拟页面回归两项、真实只读六组，真实发送仍阻断。
